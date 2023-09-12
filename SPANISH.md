@@ -85,6 +85,13 @@ Todas las herramientas se usan de forma similar y con los mismos parametros CLI
 
 > Ejemplo de panel de ayuda
 ```
+  __ _  ___        _ __ ___  ___ ___  _ __
+ / _` |/ _ \ _____| '__/ _ \/ __/ _ \| '_ \
+| (_| | (_) |_____| | |  __/ (_| (_) | | | |
+ \__, |\___/      |_|  \___|\___\___/|_| |_|
+  __/ |     by D3Ext
+ |___/      v0.1
+
 Usage of gr-secrets:
     -u)       url to search for secrets in (i.e. https://example.com/script.js)
     -l)       file containing a list of JS endpoints to search for secrets (one url per line)
@@ -105,7 +112,7 @@ Examples:
     cat js.txt | gr-secrets -r "secret=api_[A-Z]+"
 ```
 
-Mira [aqui](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) para ejemplos real de reconocimiento externo
+Mira [aqui](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) para ejemplos reales de reconocimiento externo
 
 # Demo
 

@@ -21,7 +21,7 @@
 
 </p>
 
-<p align="center">https://img.shields.io/github/release/projectdiscovery/subfinder
+<p align="center">
   <a href="#introduction">Introduction</a> •
   <a href="#tools">Tools</a> •
   <a href="#installation">Installation</a> •
@@ -88,6 +88,13 @@ All tools have similar usage and CLI parameters
 
 > Example help panel
 ```
+  __ _  ___        _ __ ___  ___ ___  _ __
+ / _` |/ _ \ _____| '__/ _ \/ __/ _ \| '_ \
+| (_| | (_) |_____| | |  __/ (_| (_) | | | |
+ \__, |\___/      |_|  \___|\___\___/|_| |_|
+  __/ |     by D3Ext
+ |___/      v0.1
+
 Usage of gr-secrets:
     -u)       url to search for secrets in (i.e. https://example.com/script.js)
     -l)       file containing a list of JS endpoints to search for secrets (one url per line)
