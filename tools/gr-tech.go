@@ -125,7 +125,7 @@ func main(){
   }
 
   if (!quiet) {
-    core.Magenta("Identifying technologies running on targets\n", use_color)
+    core.Magenta("Identifying technologies running on targets...\n", use_color)
   }
 
   var counter int

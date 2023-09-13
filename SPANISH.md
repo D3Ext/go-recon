@@ -27,12 +27,14 @@
   <a href="#herramientas">Herramientas</a> •
   <a href="#instalación">Instalación</a> •
   <a href="#uso">Uso</a> •
-  <a href="#contribuir">Contribuir</a> •
+  <a href="#contribuir">Contribuir</a>
 </p>
 
 # Introducción
 
+Este proyecto comenzó hace entorno a un año, como un simple script de Python para enumerar subdominios mediante la transparencia de los certificados SSL y otras APIs, después decidí implementar muchas mas funciones para enumerar mas cosas pero al final, el script era muy lento y no era para nada estable asi que decidí dividir el proyecto en multiples herramientas para los diferentes propósitos, esta vez en Golang y mucho mas rapido. Sin embargo, también decidí desarrollar este proyecto para aprender a usar de forma adecuada la concurrencia y los canales de Go
 
+Este toolkit proporciona diferentes herramientas para llevar a cabo reconocimiento externo. La mayoria de las funciones también estan disponibles para ser usadas, a traves de la API oficial del paquete.
 
 # Herramientas
 
@@ -43,7 +45,7 @@
 - ***gr-403*** Intenta evadir paginas que devuelven codigo de estado 403 (forbidden)
 - ***gr-openredirects*** Fuzzea por posibles open redirects en las URLs dadas
 - ***gr-dns*** Consigue información DNS de dominios
-- ***gr-aws*** Encuentra buckets S3 para un dominio/s
+- ***gr-aws*** Encuentra buckets S3 para un dominio/s (En proceso)
 - ***gr-waf*** Identifica si es posible el WAF esta corriendo en una URL
 - ***gr-tech*** Identifica las tecnologías corriendo en una URL (similar a wappalyzer)
 - ***gr-filter*** Elimina las URLs duplicadas, las inutiles (imagenes, css...) y mas, a partir de una lista de endpoints
@@ -58,6 +60,7 @@
 - Configurable mediante argumentos CLI
 - Facil de usar
 - Las herramientas se pueden combinar entre ellas
+- Almacena los resultados en formato txt o JSON
 - Soporta STDIN y STDOUT
 - Acceso directo a la API del paquete
 - Probado en Linux

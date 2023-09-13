@@ -26,12 +26,12 @@
   <a href="#tools">Tools</a> •
   <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
-  <a href="#contributing">Contributing</a> •
+  <a href="#contributing">Contributing</a>
 </p>
 
 # Introduction
 
-This project started over a year ago as a simple script to find subdomains using SSL certs transparency and other APIs, then I decided to implement a bunch of functions to enumerate more things but it was really slow and wasn't stable so I decided to split up the project for the different tasks into multiple tools, this time in Golang and much fast. Moreover, I decided to develop this project to learn how to use concurrency and channels.
+This project started over a year ago as a simple Python script to find subdomains using SSL certs transparency and other APIs, then I decided to implement a bunch of functions to enumerate more things but it was really slow and wasn't stable so I decided to split up the project for the different tasks into multiple tools, this time in Golang and much fast. Moreover, I decided to develop this project to learn how to use concurrency and channels.
 
 This toolkit provides tools for different purposes while performing external recon. Most functions are also available and can be used through the official package API for your own tools.
 
@@ -46,7 +46,7 @@ README in spanish [here](https://github.com/D3Ext/go-recon/blob/main/SPANISH.md)
 - ***gr-403*** Try to bypass pages that return 403 status code (multiple techniques)
 - ***gr-openredirects*** Fuzz for possible open redirects on given URLs
 - ***gr-dns*** Retrieve DNS info from domains
-- ***gr-aws*** Find S3 buckets for given domain
+- ***gr-aws*** Find S3 buckets for given domain (Work In Progress)
 - ***gr-waf*** Identify which WAF is running on a domain
 - ***gr-tech*** Identify technologies running on a URL (similar to wappalyzer)
 - ***gr-filter*** Remove duplicated URLs, useless URLs (images, css...) and more from a list of endpoints
@@ -61,6 +61,7 @@ README in spanish [here](https://github.com/D3Ext/go-recon/blob/main/SPANISH.md)
 - Configurable via CLI arguments
 - Easy usage
 - Tools can be combined between them
+- Output results to file in txt or JSON format
 - Supports STDIN and STDOUT
 - Direct access to official package API
 - Tested on Linux
@@ -119,15 +120,15 @@ See [here](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) for real usage 
 
 # Demo
 
-<img src="static/demo1.png">
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo1.png">
 
-<img src="static/demo2.png">
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo2.png">
 
-<img src="static/demo3.png">
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo3.png">
 
-<img src="static/demo4.png">
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo4.png">
 
-<img src="static/demo5.png">
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo5.png">
 
 # API
 
@@ -136,7 +137,7 @@ If you want to use ***go-recon*** in your own Golang code see [here](https://git
 # TODO
 
 - More tools and features
-- Dockerfile
+- ~~Dockerfile~~
 - HTML results reports
 - More optimization
 - Compare results with other tools such as **subfinder**, **gau**, **httprobe**...
