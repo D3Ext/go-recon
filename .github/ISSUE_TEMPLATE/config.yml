@@ -5,10 +5,6 @@ contact_links:
     url: https://github.com/D3Ext/go-recon/discussions/categories/q-a
     about: Ask a question
 
-  - name: Report a bug / feature to discuss
-    url: https://github.com/D3Ext/go-recon/issues
-    about: Report a bug / feature to discuss
-
   - name: Connect with the author (Discord)
     url: https://discord.com/users/d3ext
     about: Connect with the author for direct communication
