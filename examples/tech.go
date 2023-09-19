@@ -1,20 +1,18 @@
 package main
 
 import (
-  "fmt"
-  "log"
-  "github.com/D3Ext/go-recon/pkg/gorecon"
+	"fmt"
+	"github.com/D3Ext/go-recon/pkg/gorecon"
+	"log"
 )
 
-func main(){
-  timeout := 4000 // in milliseconds
+func main() {
+	timeout := 4000 // in milliseconds
 
-  techs, err := gorecon.GetTech("https://github.com", timeout)
-  if err != nil {
-    log.Fatal(err)
-  }
+	techs, err := gorecon.GetTech("https://github.com", timeout)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  fmt.Println(techs)
+	fmt.Println(techs)
 }
-
-

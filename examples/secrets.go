@@ -1,19 +1,19 @@
 package main
 
 import (
-  "fmt"
-  "log"
-  "github.com/D3Ext/go-recon/pkg/gorecon"
+	"fmt"
+	"github.com/D3Ext/go-recon/pkg/gorecon"
+	"log"
 )
 
-func main(){
+func main() {
 
-  timeout := 4000 // in milliseconds
+	timeout := 4000 // in milliseconds
 
-  secrets, err := gorecon.FindSecrets("https://example.com/endpoint.js", timeout) // return []string, error
-  if err != nil {
-    log.Fatal(err)
-  }
+	secrets, err := gorecon.FindSecrets("https://example.com/endpoint.js", timeout) // return []string, error
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  fmt.Println("Secrets:", secrets)
+	fmt.Println("Secrets:", secrets)
 }

@@ -1,27 +1,26 @@
 package main
 
 import (
-  "fmt"
-  "log"
-  "github.com/D3Ext/go-recon/pkg/gorecon"
+	"fmt"
+	"github.com/D3Ext/go-recon/pkg/gorecon"
+	"log"
 )
 
-func main(){
+func main() {
 
-  url := "http://example.com/dir/"
+	url := "http://example.com/dir/"
 
-  word := "secret"
+	word := "secret"
 
-  timeout := 5000
+	timeout := 5000
 
-  urls, status_codes, err := gorecon.Check403(url, word, timeout)
-  if err != nil {
-    log.Fatal(err)
-  }
+	urls, status_codes, err := gorecon.Check403(url, word, timeout)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  for i, _ := range urls {
-    fmt.Println("Url:", urls[i])
-    fmt.Println("Status code:", status_codes[i])
-  }
+	for i := range urls {
+		fmt.Println("Url:", urls[i])
+		fmt.Println("Status code:", status_codes[i])
+	}
 }
-

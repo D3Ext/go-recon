@@ -1,21 +1,20 @@
 package core
 
 import (
-  wp "github.com/likexian/whois-parser"
-  "github.com/likexian/whois"
+	"github.com/likexian/whois"
+	wp "github.com/likexian/whois-parser"
 )
 
 func Whois(domain string) (wp.WhoisInfo, error) {
-  raw, err := whois.Whois(domain)
-  if err != nil {
-    return wp.WhoisInfo{}, err
-  }
+	raw, err := whois.Whois(domain)
+	if err != nil {
+		return wp.WhoisInfo{}, err
+	}
 
-  result, err := wp.Parse(raw)
-  if err != nil {
-    return result, err
-  }
+	result, err := wp.Parse(raw)
+	if err != nil {
+		return result, err
+	}
 
-  return result, nil
+	return result, nil
 }
-

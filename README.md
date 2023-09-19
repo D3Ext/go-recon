@@ -11,6 +11,10 @@
     <img src="https://img.shields.io/badge/license-MIT-_red.svg">
   </a>
 
+  <a href="https://github.com/D3Ext/go-recon/blob/main/CHANGELOG.md">
+    <img src="https://img.shields.io/badge/maintained%3F-yes-brightgreen.svg">
+  </a>
+
   <a href="https://github.com/D3Ext/go-recon/issues">
     <img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat">
   </a>

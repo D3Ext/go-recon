@@ -1,12 +1,12 @@
 package gorecon
 
 import (
-  wp "github.com/likexian/whois-parser"
-  "github.com/D3Ext/go-recon/core"
+	"github.com/D3Ext/go-recon/core"
+	wp "github.com/likexian/whois-parser"
 )
 
 func Whois(domain string) (wp.WhoisInfo, error) {
-  return core.Whois(domain)
+	return core.Whois(domain)
 }
 
 /*
@@ -56,5 +56,3 @@ type Contact struct {
 }
 
 */
-
-

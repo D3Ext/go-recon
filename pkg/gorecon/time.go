@@ -1,14 +1,14 @@
 package gorecon
 
 import (
-  "time"
-  "github.com/D3Ext/go-recon/core"
+	"github.com/D3Ext/go-recon/core"
+	"time"
 )
 
-func StartTimer() (time.Time) {
-  return time.Now()
+func StartTimer() time.Time {
+	return time.Now()
 }
 
-func TimerDiff(t1 time.Time) (time.Duration) {
-  return core.TimerDiff(t1)
+func TimerDiff(t1 time.Time) time.Duration {
+	return core.TimerDiff(t1)
 }

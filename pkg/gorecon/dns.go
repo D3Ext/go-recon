@@ -1,7 +1,7 @@
 package gorecon
 
 import (
-  "github.com/D3Ext/go-recon/core"
+	"github.com/D3Ext/go-recon/core"
 )
 
 /*
@@ -18,5 +18,5 @@ type DnsInfo struct {
 */
 
 func Dns(domain string) (core.DnsInfo, error) {
-  return core.Dns(domain)
+	return core.Dns(domain)
 }

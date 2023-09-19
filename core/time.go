@@ -1,17 +1,16 @@
 package core
 
 import (
-  "time"
+	"time"
 )
 
-func StartTimer() (time.Time) {
-  return time.Now()
+func StartTimer() time.Time {
+	return time.Now()
 }
 
-func TimerDiff(t1 time.Time) (time.Duration) {
-  t2 := time.Now()
-  diff := t2.Sub(t1)
+func TimerDiff(t1 time.Time) time.Duration {
+	t2 := time.Now()
+	diff := t2.Sub(t1)
 
-  return diff.Round(10 * time.Millisecond)
+	return diff.Round(10 * time.Millisecond)
 }
-

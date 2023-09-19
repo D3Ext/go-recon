@@ -1,7 +1,7 @@
 package gorecon
 
 import (
-  "github.com/D3Ext/go-recon/core"
+	"github.com/D3Ext/go-recon/core"
 )
 
 // results := make(chan string)
@@ -11,11 +11,9 @@ import (
 //  }
 
 func GetEndpoints(urls []string, results chan string, workers int, timeout int) {
-  core.GetEndpoints(urls, results, workers, timeout)
+	core.GetEndpoints(urls, results, workers, timeout)
 }
 
 func FetchEndpoints(urls <-chan string, results chan string, user_agent string, proxy string, timeout int) {
-  core.FetchEndpoints(urls, results, user_agent, proxy, timeout)
+	core.FetchEndpoints(urls, results, user_agent, proxy, timeout)
 }
-
-
