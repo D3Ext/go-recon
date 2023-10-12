@@ -1,5 +1,6 @@
 package core
 
+// this function simply returns main go-recon banner
 func Banner() string {
 	var b string
 

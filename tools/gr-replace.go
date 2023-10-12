@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/D3Ext/go-recon/core"
@@ -27,24 +28,33 @@ type UrlsInfo struct {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-replace:
-    -l)       file containing a list of urls to replace specific strings on them (one url per line)
-    -k)       keyword to replace in urls with supplied value (i.e. FUZZ)
-    -p)       parameter name to replace it value with supplied value (i.e. id)
-    -s)       value to replace keyword with in urls (i.e. <script>alert('XSS')</script> )
-    --hide)   don't print urls that aren't modified
-    -o)       file to write modified urls into
-    -oj)      file to write modified urls into (JSON format)
-    -c)       print colors on output
-    -q)       don't print banner nor logging, only output
-    -h)       print help panel
+  INPUT:
+    -l, -list string      file containing a list of urls to replace specific strings on them (one url per line)
+
+  OUTPUT:
+    -o, -output string          file to write modified urls into
+    -oj, -output-json string    file to write modified urls into (JSON format)
+
+  CONFIG:
+    -k, -keyword string     keyword to replace in urls with supplied value (i.e. FUZZ)
+    -p, -param string       parameter name to replace its value with keyword from -k parameter (i.e. id)
+    -v, -value string       value to replace in urls with keyword from -k parameter (i.e. <script>alert('XSS')</script> )
+    -hide                   don't print unmodified urls
+    -c, -color              print colors on output
+    -q, -quiet              print neither banner nor logging, only print output
+
+  DEBUG:
+    -version        show go-recon version
+    -h, -help       print help panel
 
 Examples:
-    gr-replace -l urls.txt -k FUZZ -s "<script>alert('XSS')</script>" -o new_urls.txt -q
-    gr-replace -l urls.txt -p id -s "' or 1=1-- -" -c
-    cat urls.txt | gr-replace --hide
+    gr-replace -l urls.txt -k FUZZ -v "<script>alert('XSS')</script>" -o new_urls.txt
+    gr-replace -l urls.txt -p id -v "' or 1=1-- -" -c
+    cat urls.txt | gr-replace -hide
     `)
 }
 
+// nolint: gocyclo
 func main() {
 	var list string
 	var keyword string
@@ -53,24 +63,40 @@ func main() {
 	var hide bool
 	var output string
 	var json_output string
-	var stdin bool
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&list, "l", "", "file containing a list of urls to replace specific strings on them (one url per line)")
-	flag.StringVar(&keyword, "k", "", "keyword to replace in urls with supplied value (i.e. FUZZ)")
-	flag.StringVar(&param, "p", "", "parameter name to replace it value with supplied value (i.e. id)")
-	flag.StringVar(&value, "s", "", "value to replace keyword with in urls (i.e. )")
-	flag.BoolVar(&hide, "hide", false, "don't print urls that aren't modified")
-	flag.StringVar(&output, "o", "", "file to write modified urls into")
-	flag.StringVar(&json_output, "oj", "", "file to write modified urls into (JSON format)")
-	flag.BoolVar(&quiet, "q", false, "don't print banner, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&keyword, "k", "", "")
+	flag.StringVar(&keyword, "keyword", "", "")
+	flag.StringVar(&param, "p", "", "")
+	flag.StringVar(&param, "param", "", "")
+	flag.StringVar(&value, "v", "", "")
+	flag.StringVar(&value, "value", "", "")
+	flag.BoolVar(&hide, "hide", false, "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -102,18 +128,13 @@ func main() {
 
 	if (value == "") || (param == "" && keyword == "") || (param != "" && keyword != "") {
 		helpPanel()
-		core.Red("You need to provide a valid keyword (-k) or param value (-p) to replace with supplied value (-s)", use_color)
+		core.Red("You need to provide a valid keyword (-k) or param value (-p) to replace with supplied value (-v)", use_color)
 		os.Exit(0)
 	}
 
-	var out_f *os.File
+	var txt_out *os.File
 	if output != "" { // create output file if it was provided
-		out_f, err = os.Create(output)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else if json_output != "" {
-		out_f, err = os.Create(json_output)
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -123,7 +144,8 @@ func main() {
 	var replaced_urls []string
 
 	if !quiet {
-		core.Magenta("Replacing values...\n", use_color)
+		core.Magenta("Value: "+value, use_color)
+		core.Magenta("Processing urls and replacing values...\n", use_color)
 	}
 
 	if (list != "") || (stdin) {
@@ -184,7 +206,7 @@ func main() {
 			}
 
 			if output != "" {
-				_, err = out_f.WriteString(line + "\n")
+				_, err = txt_out.WriteString(line + "\n")
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -204,7 +226,12 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err = out_f.WriteString(string(json_body))
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -215,25 +242,20 @@ func main() {
 		if counter >= 1 {
 			fmt.Println()
 			if output != "" {
-				core.Green("Results written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Results written to "+json_output, use_color)
+				core.Green("Results written to "+output+" (TXT)", use_color)
 			}
 
-			if use_color {
-				fmt.Println("["+green("+")+"]", cyan(counter), "lines processed")
-				fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			} else {
-				fmt.Println("[+]", counter, "lines processed")
-				fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
+			if json_output != "" {
+				core.Green("Results written to "+json_output+" (JSON)", use_color)
 			}
 
+			core.Green(strconv.Itoa(counter)+" lines processed", use_color)
+		}
+
+		if use_color {
+			fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
 		} else {
-			if use_color {
-				fmt.Println("\n["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			} else {
-				fmt.Println("\n[+] Elapsed time:", core.TimerDiff(t1))
-			}
+			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
 		}
 	}
 }

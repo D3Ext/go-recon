@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/fatih/color"
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
+	"io/ioutil"
 	"log"
 	"net/http"
 	nu "net/url"
@@ -32,28 +35,47 @@ type UrlsInfo struct {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-probe:
-    -d)         domain to probe for working http and https servers
-    -l)         file containing a list of domains to probe (one per line)
-    -x)         don't check http if https is working (default=disabled)
-    -m)         requests method (GET, POST, PUT...)
-    -w)         number of concurrent workers (split same amount between http and https) (default=20)
-    -a)         user agent to include on requests (default=none)
-    -t)         milliseconds to wait before each request timeout (default=4000)
-    -sc)        filter for an especific status code (i.e. 403)
-    --status)   show status code of each request
-    --title)    show title of each request
-    --location) show redirect location if exists
-    -o)         file to write active urls into
-    -oj)        file to write active urls into (JSON format)
-    -c)         use color on output
-    -q)         don't print banner nor logging, only output
-    -h)         print help panel
+  INPUT:
+    -d, -domain string    domain/url/host to probe for working http and https servers
+    -l, -list string      file containing a list of domains/urls to probe (one url per line)
+
+  OUTPUT:
+    -o, -output string          file to write active urls into
+    -oj, -output-json string    file to write active urls into (JSON format)
+    -oc, -output-csv string     file to write active urls into (CSV format)
+
+  FILTER:
+    -fs, -filter-string string    filter urls that match an especific string on response body
+    -fc, -filter-code int[]       filter urls that match an especific status codes (separated by comma) (i.e. 403,401)
+
+  INFO:
+    -status       show status code of each request
+    -title        show title of each request
+    -location     show redirect location if exists
+    -body         show response body instead of active host
+
+  CONFIG:
+    -techs                use go-wappalyzer to detect technologies running on each url
+    -nr, -no-redirects    don't follow http redirects
+    -s, -skip             don't check http if https is working (default=disabled)
+    -m, -method string    requests method (i.e. POST)
+    -w, -workers int      number of concurrent workers (split same amount between http and https) (default=20)
+    -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -a, -agent string     user agent to include on requests (default=none)
+    -t, -timeout int      milliseconds to wait before each request timeout (default=4000)
+    -c, -color            use color on output
+    -q, -quiet            print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
   
 Examples:
     gr-probe -l domains.txt -w 15 -o results.txt
-    gr-probe -l domains.txt --status --title --location -c
-    cat domains.txt | gr-probe -x -c
-    cat domains.txt | gr-probe -q -o urls.txt
+    gr-probe -l domains.txt -status -title -location -c
+    gr-probe -l urls.txt -techs -c
+    cat domains.txt | gr-probe -skip -c
+    cat domains.txt | gr-probe -quiet -o urls.txt
     `)
 }
 
@@ -75,44 +97,84 @@ func printWithColor(n int, use_color bool) string {
 	}
 }
 
+var csv_info [][]string
+
+// nolint: gocyclo
 func main() {
 	var domain string
 	var list string
-	var prefer_https bool
+	var skip_http bool
 	var method string
 	var workers int
+	var proxy string
 	var timeout int
 	var user_agent string
 	var output string
 	var json_output string
+	var csv_output string
 	var use_color bool
+	var string_to_search string
 	var status_code_to_search int
+	var techs bool
+	var no_redirects bool
+	var show_body bool
 	var status_code bool
 	var title bool
 	var location bool
 	var quiet bool
+	var version bool
 	var help bool
 	var stdin bool
 
-	flag.StringVar(&domain, "d", "", "domain to probe for working http and https servers")
-	flag.StringVar(&list, "l", "", "file containing a list of domain to probe (one per line)")
-	flag.BoolVar(&prefer_https, "x", false, "don't check http if https is working")
-	flag.StringVar(&method, "m", "GET", "requests method (GET, POST, PUT...)")
-	flag.IntVar(&workers, "w", 20, "number of concurrent workers (split same amount between http and https)")
-	flag.IntVar(&timeout, "t", 4000, "milliseconds to wait before each request timeout (default=4000)")
-	flag.StringVar(&output, "o", "", "file to write active urls into")
-	flag.StringVar(&json_output, "oj", "", "file to write active urls into (JSON format)")
-	flag.StringVar(&user_agent, "a", "", "user agent to include on requests (default=none)")
-	flag.IntVar(&status_code_to_search, "sc", 0, "filter for an especific status code (i.e. 403)")
-	flag.BoolVar(&status_code, "status", false, "show status code of each request")
-	flag.BoolVar(&title, "title", false, "show title of each request")
-	flag.BoolVar(&location, "location", false, "show redirect location")
-	flag.BoolVar(&use_color, "c", false, "use color on output")
-	flag.BoolVar(&quiet, "q", false, "don't print banner nor logging, only output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	//-ports                also probe for common HTTP/S ports (i.e. 8080)
+	flag.StringVar(&domain, "d", "", "")
+	flag.StringVar(&domain, "domain", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.BoolVar(&skip_http, "s", false, "")
+	flag.BoolVar(&skip_http, "skip", false, "")
+	flag.StringVar(&method, "m", "GET", "")
+	flag.StringVar(&method, "method", "GET", "")
+	flag.IntVar(&workers, "w", 20, "")
+	flag.IntVar(&workers, "workers", 20, "")
+	flag.IntVar(&timeout, "t", 4000, "")
+	flag.IntVar(&timeout, "timeout", 4000, "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.StringVar(&csv_output, "oc", "", "")
+	flag.StringVar(&csv_output, "output-csv", "", "")
+	flag.StringVar(&proxy, "proxy", "", "")
+	flag.StringVar(&user_agent, "a", "", "")
+	flag.StringVar(&user_agent, "agent", "", "")
+	flag.StringVar(&string_to_search, "fs", "", "")
+	flag.StringVar(&string_to_search, "filter-string", "", "")
+	flag.IntVar(&status_code_to_search, "fc", 0, "")
+	flag.IntVar(&status_code_to_search, "filter-code", 0, "")
+	flag.BoolVar(&no_redirects, "nr", false, "")
+	flag.BoolVar(&no_redirects, "no-redirects", false, "")
+	flag.BoolVar(&techs, "techs", false, "")
+	flag.BoolVar(&show_body, "body", false, "")
+	flag.BoolVar(&status_code, "status", false, "")
+	flag.BoolVar(&title, "title", false, "")
+	flag.BoolVar(&location, "location", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
+
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -147,20 +209,35 @@ func main() {
 		os.Exit(0)
 	}
 
-	var out_f *os.File
-	if output != "" {
-		out_f, err = os.Create(output)
+	if proxy != "" {
+		os.Setenv("HTTP_PROXY", proxy)
+		os.Setenv("HTTPS_PROXY", proxy)
+	}
+
+	var status_codes []int
+	for _, sc := range strings.Split(strings.TrimSpace(strconv.Itoa(status_code_to_search)), ",") {
+		s, err := strconv.Atoi(sc)
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else if json_output != "" {
-		out_f, err = os.Create(json_output)
+
+		status_codes = append(status_codes, s)
+	}
+
+	var txt_out *os.File
+	if output != "" {
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	client := core.CreateHttpClient(timeout) // Create http client via auxiliary function
+	var client *http.Client
+	if no_redirects {
+		client = core.CreateHttpClient(timeout) // Create http client via auxiliary function (don't follow redirects)
+	} else {
+		client = core.CreateHttpClientFollowRedirects(timeout) // Create http client via auxiliary function (follow redirects)
+	}
 
 	// Create channels
 	https_c := make(chan string)
@@ -169,100 +246,16 @@ func main() {
 	var counter int
 	var probed_urls []string
 
-	if domain != "" { // Enter here if domain was given
-		// send request to domain HTTPS server
-		req, err := http.NewRequest(method, "https://"+domain, nil)
-		if err != nil {
-			log.Fatal(err)
+	if !quiet {
+		core.Warning("Use with caution.", use_color)
+		core.Magenta("Concurrent workers: "+strconv.Itoa(workers), use_color)
+		if proxy != "" {
+			core.Magenta("Proxy: "+proxy, use_color)
 		}
-		req.Header.Add("Connection", "close")
-		if user_agent != "" {
-			req.Header.Set("User-Agent", user_agent)
-		}
-		req.Close = true
+		core.Magenta("Sending requests to given servers...\n", use_color)
+	}
 
-		resp, err := client.Do(req) // send request
-		if err == nil {
-			doc, err := goquery.NewDocumentFromReader(resp.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			title_str := doc.Find("title").First().Text()
-
-			if status_code_to_search == 0 { // don't look for an especific status code
-				fmt.Print("https://" + domain)
-				if status_code {
-					fmt.Print(" - [" + printWithColor(resp.StatusCode, use_color) + "]")
-				}
-
-				if (title) && (title_str != "") {
-					fmt.Print(" - [Title: " + title_str + "]")
-				}
-
-				if (location) && (resp.Header.Get("Location") != "") {
-					fmt.Print(" - [Location: " + resp.Header.Get("Location") + "]")
-				}
-
-				fmt.Println()
-				probed_urls = append(probed_urls, "https://"+domain)
-
-			} else if status_code_to_search == resp.StatusCode {
-				fmt.Println("https://" + domain)
-				probed_urls = append(probed_urls, "https://"+domain)
-			}
-
-			defer resp.Body.Close()
-			counter += 1
-		}
-
-		// now send request to domain HTTP server
-		req, err = http.NewRequest(method, "http://"+domain, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		req.Header.Add("Connection", "close")
-		if user_agent != "" {
-			req.Header.Set("User-Agent", user_agent)
-		}
-		req.Close = true
-
-		resp, err = client.Do(req) // send request
-		if err == nil {
-			doc, err := goquery.NewDocumentFromReader(resp.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			title_str := doc.Find("title").Text()
-
-			if status_code_to_search == 0 { // don't look for an especific status code
-				fmt.Print("http://" + domain)
-				if status_code {
-					fmt.Print(" - [" + printWithColor(resp.StatusCode, use_color) + "]")
-				}
-
-				if (title) && (title_str != "") {
-					fmt.Print(" - [Title: " + title_str + "]")
-				}
-
-				if (location) && (resp.Header.Get("Location") != "") {
-					fmt.Print(" - [Location: " + resp.Header.Get("Location") + "]")
-				}
-
-				fmt.Println()
-				probed_urls = append(probed_urls, "http://"+domain)
-
-			} else if status_code_to_search == resp.StatusCode {
-				fmt.Println("http://" + domain)
-				probed_urls = append(probed_urls, "http://"+domain)
-			}
-
-			defer resp.Body.Close()
-			counter += 1
-		}
-
-	} else if (list != "") || (stdin) { // Enter here if list was given or if stdin has value
+	if (domain != "") || (list != "") || (stdin) { // Enter here if list was given or if stdin has value
 
 		var f *os.File
 		var err error
@@ -302,36 +295,46 @@ func main() {
 						if err != nil {
 							log.Fatal(err)
 						}
+						defer resp.Body.Close()
 
+						body := doc.Selection.Text()
 						title_str := doc.Find("title").Text()
 
-						if status_code_to_search == 0 {
-							format_str := "https://" + url
+						var format_str string
+
+						if (status_code_to_search == 0 || status_code_to_search == resp.StatusCode) && !show_body {
+							if string_to_search != "" {
+								if !strings.Contains(string(body), string_to_search) {
+									continue
+								}
+							}
+
+							resp_l := resp.Header.Get("Location")
+
+							format_str = formatInfo("https://"+url, use_color, status_code, resp.StatusCode, title, title_str, location, resp_l)
+
 							probed_urls = append(probed_urls, "https://"+url)
+							csv_info = append(csv_info, []string{"https://" + url, strconv.Itoa(resp.StatusCode), title_str})
 
-							if status_code {
-								format_str = format_str + " - [" + printWithColor(resp.StatusCode, use_color) + "]"
-							}
-
-							if (title) && (title_str != "") {
-								format_str = format_str + " - [Title: " + title_str + "]"
-							}
-
-							if (location) && (resp.Header.Get("Location") != "") {
-								format_str = format_str + " - [Location: " + resp.Header.Get("Location") + "]"
+							if techs {
+								format_str = format_str + getTechs(resp, use_color)
 							}
 
 							out <- format_str
+							counter += 1
 
-						} else if status_code_to_search == resp.StatusCode {
-							out <- "https://" + url
-							probed_urls = append(probed_urls, "https://"+url)
+						} else if (status_code_to_search == 0 || status_code_to_search == resp.StatusCode) && show_body {
+							if string_to_search != "" {
+								if !strings.Contains(string(body), string_to_search) {
+									continue
+								}
+							}
+
+							out <- string(body)
+							counter += 1
 						}
 
-						defer resp.Body.Close()
-						counter += 1
-
-						if prefer_https { // skip to next url so it isn't sent through http channel
+						if skip_http { // skip to next url so it isn't sent through http channel
 							continue
 						}
 					}
@@ -367,34 +370,44 @@ func main() {
 						if err != nil {
 							log.Fatal(err)
 						}
+						defer resp.Body.Close()
 
+						body := doc.Selection.Text()
 						title_str := doc.Find("title").Text()
 
-						if status_code_to_search == 0 {
-							format_str := "http://" + url
+						var format_str string
+
+						if (status_code_to_search == 0 || status_code_to_search == resp.StatusCode) && !show_body {
+							if string_to_search != "" {
+								if !strings.Contains(string(body), string_to_search) {
+									continue
+								}
+							}
+
+							resp_l := resp.Header.Get("Location")
+
+							format_str = formatInfo("http://"+url, use_color, status_code, resp.StatusCode, title, title_str, location, resp_l)
+
 							probed_urls = append(probed_urls, "http://"+url)
+							csv_info = append(csv_info, []string{"http://" + url, strconv.Itoa(resp.StatusCode), title_str})
 
-							if status_code {
-								format_str = format_str + " - [" + printWithColor(resp.StatusCode, use_color) + "]"
-							}
-
-							if (title) && (title_str != "") {
-								format_str = format_str + " - [Title: " + title_str + "]"
-							}
-
-							if (location) && (resp.Header.Get("Location") != "") {
-								format_str = format_str + " - [Location: " + resp.Header.Get("Location") + "]"
+							if techs {
+								format_str = format_str + getTechs(resp, use_color)
 							}
 
 							out <- format_str
+							counter += 1
 
-						} else if status_code_to_search == resp.StatusCode {
-							out <- "http://" + url
-							probed_urls = append(probed_urls, "http://"+url)
+						} else if (status_code_to_search == 0 || status_code_to_search == resp.StatusCode) && show_body {
+							if string_to_search != "" {
+								if !strings.Contains(string(body), string_to_search) {
+									continue
+								}
+							}
+
+							out <- string(body)
+							counter += 1
 						}
-
-						defer resp.Body.Close()
-						counter += 1
 					}
 				}
 
@@ -417,7 +430,7 @@ func main() {
 				fmt.Println(o)
 
 				if output != "" { // if output file is given, write urls into it
-					_, err = out_f.WriteString(url + "\n")
+					_, err = txt_out.WriteString(url + "\n")
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -433,22 +446,31 @@ func main() {
 		}()
 
 		// load urls to HTTPS channel
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() { // iterate over every single line
-			line := scanner.Text()
+		if (list != "") || (stdin) {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() { // iterate over every single line
+				line := scanner.Text()
 
-			if (strings.HasPrefix(line, "http://")) || (strings.HasPrefix(line, "https://")) { // Check if domain is valid
-				u, _ := nu.Parse(line)
-				https_c <- strings.TrimPrefix(line, u.Scheme+"://") // remove scheme
+				if (strings.HasPrefix(line, "http://")) || (strings.HasPrefix(line, "https://")) { // Check if domain is valid
+					u, _ := nu.Parse(line)
+					https_c <- strings.TrimPrefix(line, u.Scheme+"://") // remove scheme
 
-			} else if strings.Contains(line, ".") {
-				https_c <- line
+				} else if strings.Contains(line, ".") {
+					https_c <- line
+				}
+			}
+		} else {
+			if (strings.HasPrefix(domain, "http://")) || (strings.HasPrefix(domain, "https://")) { // Check if domain is valid
+				u, _ := nu.Parse(domain)
+				https_c <- strings.TrimPrefix(domain, u.Scheme+"://") // remove scheme
+
+			} else if strings.Contains(domain, ".") {
+				https_c <- domain
 			}
 		}
 
 		close(https_c)
 		out_wg.Wait() // wait for output
-
 	}
 
 	if json_output != "" {
@@ -463,9 +485,31 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err = out_f.WriteString(string(json_body))
+		json_out, err := os.Create(json_output)
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"url", "status", "title"}
+
+		writer.Write(headers)
+		for _, row := range csv_info {
+			writer.Write(row)
 		}
 	}
 
@@ -474,9 +518,15 @@ func main() {
 		if counter >= 1 {
 			fmt.Println()
 			if output != "" {
-				core.Green("Urls written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Urls written to "+json_output, use_color)
+				core.Green("Urls written to "+output+" (TXT)", use_color)
+			}
+
+			if json_output != "" {
+				core.Green("Urls written to "+json_output+" (JSON)", use_color)
+			}
+
+			if csv_output != "" {
+				core.Green("Urls written to "+csv_output+" (CSV)", use_color)
 			}
 
 			if use_color {
@@ -486,7 +536,11 @@ func main() {
 			}
 
 		} else {
-			core.Red("No url is active", use_color)
+			if string_to_search == "" && status_code_to_search == 0 {
+				core.Red("No url is active", use_color)
+			} else {
+				core.Red("No url found", use_color)
+			}
 		}
 
 		if use_color {
@@ -495,4 +549,72 @@ func main() {
 			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
 		}
 	}
+}
+
+func getTechs(resp *http.Response, use_color bool) string {
+	var final_str string
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	wappalyzer_client, err := wappalyzer.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var techs_array []string
+	techs := wappalyzer_client.Fingerprint(resp.Header, data)
+
+	if len(techs) >= 1 {
+		final_str = " - ["
+		for k := range techs {
+			techs_array = append(techs_array, k)
+		}
+
+		for _, v := range techs_array {
+			if techs_array[len(techs_array)-1] == v {
+				if use_color {
+					final_str = fmt.Sprintf("%s%s]", final_str, cyan(v))
+				} else {
+					final_str = fmt.Sprintf("%s%s]", final_str, v)
+				}
+			} else {
+				if use_color {
+					final_str = fmt.Sprintf("%s%s, ", final_str, cyan(v))
+				} else {
+					final_str = fmt.Sprintf("%s%s, ", final_str, v)
+				}
+			}
+		}
+	}
+
+	return final_str
+}
+
+func formatInfo(url string, use_color bool, status_code bool, resp_code int, title bool, title_str string, location bool, resp_l string) string {
+	if status_code {
+		url = url + " - [" + printWithColor(resp_code, use_color) + "]"
+	}
+
+	if (title) && (title_str != "") {
+		url = url + " - [Title: " + title_str + "]"
+	}
+
+	if (location) && (resp_l != "") {
+		url = url + " - [Location: " + resp_l + "]"
+	}
+
+	return url
+}
+
+func checkStatusCodes(codes_to_filter []int, code int) bool {
+	for _, c := range codes_to_filter {
+		if c == code {
+			return true
+		}
+	}
+
+	return false
 }

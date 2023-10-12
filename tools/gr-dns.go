@@ -70,12 +70,20 @@ func printInfo(domain string, dns_info core.DnsInfo, color bool) {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-dns:
-    -d)       domain to find DNS information (i.e. example.com)
-    -l)       file containing a list of domains to find their DNS info (one domain per line)
-    -o)       file to write DNS info into (JSON format)
-    -c)       print colors on output (recommended)
-    -q)       don't print banner, only output
-    -h)       print help panel
+  INPUT:
+    -d, -domain string      domain to find DNS information (i.e. example.com)
+    -l, -list string        file containing a list of domains to find their DNS info (one domain per line)
+
+  OUTPUT:
+    -o, -output string      file to write DNS info into (JSON format)
+
+  CONFIG:
+    -c, -color      print colors on output (recommended)
+    -q, -quiet      don't print banner, only output
+
+  DEBUG:
+    -version        show go-recon version
+    -h, -help       print help panel
 
 Examples:
     gr-dns -d example.com -c
@@ -84,24 +92,38 @@ Examples:
     `)
 }
 
+// nolint: gocyclo
 func main() {
 	var domain string
 	var list string
 	var output string
-	var stdin bool
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&domain, "d", "", "domain to find DNS information (i.e. example.com)")
-	flag.StringVar(&list, "l", "", "file containing a list of domains to find their DNS info (one domain per line)")
-	flag.StringVar(&output, "o", "", "file to write DNS info into (JSON format)")
-	flag.BoolVar(&quiet, "q", false, "don't print banner, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output (recommended)")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&domain, "d", "", "")
+	flag.StringVar(&domain, "domain", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())

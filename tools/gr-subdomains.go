@@ -8,8 +8,9 @@ import (
 	"github.com/fatih/color"
 	"log"
 	"os"
+	"strconv"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/D3Ext/go-recon/core"
 )
@@ -26,46 +27,105 @@ type SubdomainsInfo struct {
 	Time       string   `json:"time"`
 }
 
+func listProviders(quiet bool) {
+	if !quiet {
+		fmt.Println(`[*] Available providers:
+    - alienvault
+    - anubis
+    - commoncrawl
+    - crt
+    - digitorus
+    - hackertarget
+    - rapiddns
+    - wayback
+  
+    Providers used by default: [alienvault, crt, hackertarget, rapiddns, digitorus]`)
+	} else {
+		fmt.Println("alienvault\nanubis\ncommoncrawl\ncrt\ndigitorus\nhackertarget\nrapiddns\nwayback")
+	}
+}
+
 func helpPanel() {
 	fmt.Println(`Usage of gr-subdomains:
-    -d)       domain to find its subdomains (i.e. example.com)
-    -l)       file containing a list of domains to find their subdomains (one domain per line)
-    -o)       file to write subdomains into
-    -oj)      file to write subdomains into (JSON format)
-    -c)       print colors on output
-    -t)       milliseconds to wait before each request timeout (default=5000)
-    -q)       don't print banner nor logging, only output
-    -h)       print help panel
+  INPUT:
+    -d, -domain string      domain to find its subdomains (i.e. example.com)
+    -l, -list string        file containing a list of domains to find their subdomains (one domain per line)
+
+  OUTPUT:
+    -o, -output string          file to write subdomains into
+    -oj, -output-json string    file to write subdomains into (JSON format)
+
+  PROVIDERS:
+    -all                      use all available providers to discover subdomains (slower than default)
+    -p, -providers string[]   providers to use for subdomain discovery (separated by comma)
+    -lp, -list-providers      list available providers
+
+  CONFIG:
+    -proxy string         proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -t, -timeout int      milliseconds to wait before each request timeout (default=5000)
+    -c, -color            print colors on output
+    -q, -quiet            print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
   
 Examples:
     gr-subdomains -d example.com -o subdomains.txt -c
-    gr-subdomains -l domains.txt
-    cat domains.txt | gr-subdomains -q
+    gr-subdomains -l domains.txt -p crt,hackertarget -t 8000
+    cat domain.txt | gr-subdomains -all
+    cat domain.txt | gr-subdomains -p anubis -oj subdomains.json -c
     `)
 }
 
+// nolint: gocyclo
 func main() {
 	var domain string
 	var list string
+	var all bool
+	var providers_str string
+	var list_providers bool
 	var output string
 	var json_output string
+	var proxy string
 	var stdin bool
 	var timeout int
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
 
-	flag.StringVar(&domain, "d", "", "domain to find its subdomains (i.e. example.com)")
-	flag.StringVar(&list, "l", "", "file containing a list of domains to find their subdomains (one domain per line)")
-	flag.StringVar(&output, "o", "", "file to write subdomains into")
-	flag.StringVar(&json_output, "oj", "", "file to write subdomains into (JSON format)")
-	flag.IntVar(&timeout, "t", 5000, "milliseconds to wait before each request timeout")
-	flag.BoolVar(&quiet, "q", false, "don't print banner nor logging, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&domain, "d", "", "")
+	flag.StringVar(&domain, "domain", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.BoolVar(&all, "all", false, "")
+	flag.StringVar(&providers_str, "p", "", "")
+	flag.StringVar(&providers_str, "providers", "", "")
+	flag.BoolVar(&list_providers, "lp", false, "")
+	flag.BoolVar(&list_providers, "list-providers", false, "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.StringVar(&proxy, "proxy", "", "")
+	flag.IntVar(&timeout, "t", 5000, "")
+	flag.IntVar(&timeout, "timeout", 5000, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -73,6 +133,11 @@ func main() {
 
 	if help {
 		helpPanel()
+		os.Exit(0)
+	}
+
+	if list_providers {
+		listProviders(quiet)
 		os.Exit(0)
 	}
 
@@ -102,15 +167,23 @@ func main() {
 		os.Exit(0)
 	}
 
+	if proxy != "" {
+		os.Setenv("HTTP_PROXY", proxy)
+		os.Setenv("HTTPS_PROXY", proxy)
+	}
+
+	if providers_str == "" { // default providers
+		providers_str = "alienvault,crt,digitorus,hackertarget,rapiddns"
+	} else if all { // all providers
+		providers_str = "alienvault,anubis,commoncrawl,crt,digitorus,hackertarget,rapiddns,wayback"
+	}
+
+	providers := strings.Split(strings.ToLower(strings.ReplaceAll(providers_str, " ", "")), ",")
+
 	// define variables which will be used to write subdomains to file
-	var out_f *os.File
+	var txt_out *os.File
 	if output != "" {
-		out_f, err = os.Create(output)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else if json_output != "" {
-		out_f, err = os.Create(json_output)
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -118,55 +191,62 @@ func main() {
 
 	var counter int
 	var total_counter int
+	var found_subdomains []string
+
+	client := core.CreateHttpClient(timeout)
+
+	// Create channel for asynchronous jobs
+	results := make(chan string)
+
+	var wg sync.WaitGroup
+	var out sync.WaitGroup
+	out.Add(1)
+
+	if !quiet {
+		core.Warning("Use with caution", use_color)
+	}
 
 	if domain != "" { // if domain parameter has value enter here
 
 		if !quiet {
-			core.Magenta("Finding "+domain+" subdomains...\n", use_color)
+			core.Magenta("Discovering "+domain+" subdomains...", use_color)
+			core.Magenta(fmt.Sprintf("Selected providers: %s\n", providers), use_color)
 		}
 
-		// Create channel for asynchronous jobs
-		subdoms := make(chan string)
-		var subdomains []string
+		wg.Add(1) // used to wait until main goroutine finish, that goroutine will generate 8 concurrent workers
 
-		// Run go routine
-		go core.GetAllSubdomains(domain, subdoms, timeout)
+		go func() { // goroutine used for printing results
+			for subdomain := range results {
+				//fmt.Println(subdomain)
+				if checkSubdomain(subdomain, found_subdomains) {
+					fmt.Println(subdomain)
+					found_subdomains = append(found_subdomains, subdomain)
 
-		for sub := range subdoms { // iterate over subdomains received through channel
-			subdomains = append(subdomains, sub)
-		}
-
-		for _, res := range subdomains {
-			if (res != "") && (!strings.HasPrefix(res, "*.")) {
-				fmt.Println(res)
-				counter += 1
-
-				if output != "" { // if output parameter has value, write subdomains to file
-					_, err = out_f.WriteString(res + "\n")
-					if err != nil {
-						log.Fatal(err)
+					if output != "" { // if output parameter has value, write subdomains to file
+						_, err = txt_out.WriteString(subdomain + "\n")
+						if err != nil {
+							log.Fatal(err)
+						}
 					}
+
+					counter++
 				}
 			}
-		}
 
-		if json_output != "" {
-			json_subs := SubdomainsInfo{
-				Subdomains: subdomains,
-				Length:     counter,
-				Time:       core.TimerDiff(t1).String(),
-			}
+			out.Done()
+		}()
 
-			json_body, err := json.Marshal(json_subs)
-			if err != nil {
-				log.Fatal(err)
-			}
+		// run all providers enum
+		go func() {
+			defer wg.Done()
 
-			_, err = out_f.WriteString(string(json_body))
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
+			//func GetAllSubdomains(dom string, c chan string, providers []string, client *http.Client) error
+			core.GetSubdomains(domain, results, providers, client)
+		}()
+
+		wg.Wait()
+		close(results)
+		out.Wait()
 
 	} else if (list != "") || (stdin) { // enter here if list parameter has value or if stdin has value
 
@@ -196,56 +276,79 @@ func main() {
 
 		if !quiet {
 			if use_color {
-				fmt.Println("["+magenta("*")+"] Finding subdomains for", green(doms_length), "domains")
+				fmt.Println("["+magenta("*")+"] Discovering subdomains for", green(doms_length), "domains")
 			} else {
-				fmt.Println("[*] Finding subdomains for", doms_length, "domains")
+				fmt.Println("[*] Discovering subdomains for", doms_length, "domains")
 			}
+			core.Magenta(fmt.Sprintf("Selected providers: %s", providers), use_color)
 		}
 
-		for _, dom := range domains {
-			if !quiet {
-				if use_color {
-					fmt.Println("[" + magenta("*") + "] " + "Domain: " + green(dom))
-				} else {
-					fmt.Println("[*] Domain: " + dom)
-				}
-			}
+		// Create channel for asynchronous jobs
+		results := make(chan string)
 
-			// Create channel for asynchronous jobs
-			subdoms := make(chan string)
-			// Run go routine
-			go core.GetAllSubdomains(dom, subdoms, timeout)
+		go func() { // goroutine used for printing results
+			for subdomain := range results {
+				if checkSubdomain(subdomain, found_subdomains) {
+					fmt.Println(subdomain)
+					found_subdomains = append(found_subdomains, subdomain)
 
-			for sub := range subdoms { // iterate over subdomains received through channel
-				if sub != "" {
-					fmt.Println(sub)
-					counter += 1
-					total_counter += 1
-				}
-
-				if output != "" { // if output parameter has value, write subdomains to file
-					_, err = out_f.WriteString(sub + "\n")
-					if err != nil {
-						log.Fatal(err)
+					if output != "" { // if output parameter has value, write subdomains to file
+						_, err = txt_out.WriteString(subdomain + "\n")
+						if err != nil {
+							log.Fatal(err)
+						}
 					}
+
+					total_counter += 1
+					counter++
 				}
 			}
 
-			// Empty channel
-			for len(subdoms) > 0 {
-				<-subdoms
+			out.Done()
+		}()
+
+		for _, dom := range domains {
+			wg.Add(1)
+
+			if !quiet {
+				core.Magenta("Enumerating "+dom+" subdomains", use_color)
 			}
 
-			if (!quiet) && (dom != "") { //(dom != domains[len(domains)-1]) {
-				if use_color {
-					fmt.Println("["+green("+")+"]", cyan(counter), "subdomains found for "+dom+"\n")
-				} else {
-					fmt.Println("[+]", counter, "subdomains found for "+dom+"\n")
-				}
+			core.GetSubdomains(dom, results, providers, client)
+
+			if !quiet {
+				core.Green(strconv.Itoa(counter)+" subdomains found for "+dom+"\n", use_color)
 			}
 
 			counter = 0
-			time.Sleep(50 * time.Millisecond)
+			wg.Done()
+		}
+
+		wg.Wait()
+		close(results)
+		out.Wait()
+	}
+
+	if json_output != "" {
+		json_subs := SubdomainsInfo{
+			Subdomains: found_subdomains,
+			Length:     counter,
+			Time:       core.TimerDiff(t1).String(),
+		}
+
+		json_body, err := json.Marshal(json_subs)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
@@ -279,4 +382,15 @@ func main() {
 			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
 		}
 	}
+}
+
+func checkSubdomain(str string, slice []string) bool {
+	for _, s := range slice {
+		if strings.ToLower(str) == strings.ToLower(s) {
+			//fmt.Println(strings.ToLower(str), "-", strings.ToLower(s))
+			return false
+		}
+	}
+
+	return true
 }

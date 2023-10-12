@@ -1,46 +1,23 @@
 package core
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
-func DetectWaf(url string, payload string, keyword string, timeout int) (string, error) {
+// this function send a request to url with an LFI payload
+// to try to trigger the possible WAF (Web Application Firewall) i.e. Cloudflare
+// Example: waf, err := gorecon.DetectWaf(url, "", "", gorecon.DefaultHttpClient())
+func DetectWaf(url string, payload string, keyword string, client *http.Client) (string, error) { // nolint: gocyclo
 	if payload == "" {
 		payload = "../../../../../etc/passwd"
 	}
 
-	if timeout == 0 {
-		timeout = 4000
-	}
-
-	// Create requests client
-	t := time.Duration(timeout) * time.Millisecond
-
-	var transport = &http.Transport{
-		MaxIdleConns:      30,
-		IdleConnTimeout:   time.Second,
-		DisableKeepAlives: true,
-		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // Disable ssl verify
-		DialContext: (&net.Dialer{
-			Timeout:   t,
-			KeepAlive: time.Second,
-		}).DialContext,
-	}
-
-	client := &http.Client{ // Create requests client
-		Transport: transport,
-		Timeout:   t,
-	}
-
-	var json_url string = "https://raw.githubusercontent.com/D3Ext/AORT/main/utils/wafsign.json"
+	var json_url string = "https://raw.githubusercontent.com/D3Ext/go-recon/main/utils/waf_vendors.json"
 	var m map[string]interface{}
 
 	req, _ := http.NewRequest("GET", json_url, nil)

@@ -2,18 +2,18 @@ package gorecon
 
 import (
 	"github.com/D3Ext/go-recon/core"
+	"net/http"
 )
 
-// results := make(chan string)
-// go gorecon.GetEndpointsFromFile(urls, results, 15, 5000)
-//  for endpoint := range results {
-//    fmt.Println(endpoint)
-//  }
-
-func GetEndpoints(urls []string, results chan string, workers int, timeout int) {
-	core.GetEndpoints(urls, results, workers, timeout)
+// main function to extract JS endpoints from a list of urls
+// it receives a custom client for further customization
+// Example: go gorecon.GetEndpointsFromFile(urls, results, 15, gorecon.DefaultClient())
+func GetEndpoints(urls []string, results chan string, workers int, client *http.Client) error {
+	return core.GetEndpoints(urls, results, workers, client)
 }
 
-func FetchEndpoints(urls <-chan string, results chan string, user_agent string, proxy string, timeout int) {
-	core.FetchEndpoints(urls, results, user_agent, proxy, timeout)
+// this function receives urls from channel so
+// it's better for concurrency and configuration
+func FetchEndpoints(urls <-chan string, results chan string, client *http.Client) error {
+	return core.FetchEndpoints(urls, results, client)
 }

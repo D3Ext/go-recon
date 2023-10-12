@@ -12,10 +12,8 @@ all:
 	$(CC) build -o build/gr-dns tools/gr-dns.go
 	$(CC) build -o build/gr-openredirects tools/gr-openredirects.go
 	$(CC) build -o build/gr-crawl tools/gr-crawl.go
-	$(CC) build -o build/gr-js tools/gr-js.go
 	$(CC) build -o build/gr-whois tools/gr-whois.go
 	$(CC) build -o build/gr-replace tools/gr-replace.go
-	$(CC) build -o build/gr-tech tools/gr-tech.go
 	$(CC) build -o build/gr-403 tools/gr-403.go
 	$(CC) build -o build/gr-filter tools/gr-filter.go
 
@@ -29,12 +27,16 @@ install:
 	install -m 0755 build/gr-dns $(DESTDIR)/usr/bin/gr-dns
 	install -m 0755 build/gr-openredirects $(DESTDIR)/usr/bin/gr-openredirects
 	install -m 0755 build/gr-crawl $(DESTDIR)/usr/bin/gr-crawl
-	install -m 0755 build/gr-js $(DESTDIR)/usr/bin/gr-js
 	install -m 0755 build/gr-whois $(DESTDIR)/usr/bin/gr-whois
-	install -m 0755 build/gr-tech $(DESTDIR)/usr/bin/gr-tech
 	install -m 0755 build/gr-403 $(DESTDIR)/usr/bin/gr-403
 	install -m 0755 build/gr-filter $(DESTDIR)/usr/bin/gr-filter
 	install -m 0755 build/gr-replace $(DESTDIR)/usr/bin/gr-replace
+
+extra:
+	mkdir -p ~/.config/go-recon
+	cp -r utils/patterns/ ~/.config/go-recon/
+	cp utils/autocompletion.bash ~/.config/go-recon/
+	echo "source ~/.config/go-recon/autocompletion.bash" >> ~/.bashrc
 
 clean:
 	rm -rf build

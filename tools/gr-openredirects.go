@@ -2,20 +2,17 @@ package main
 
 import (
 	"bufio"
-	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
 	tld "github.com/jpillora/go-tld"
 	"log"
-	"net"
 	"net/http"
-	nurl "net/url"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/D3Ext/go-recon/core"
 )
@@ -26,65 +23,113 @@ var green func(a ...interface{}) string = color.New(color.FgGreen).SprintFunc()
 var magenta func(a ...interface{}) string = color.New(color.FgMagenta).SprintFunc()
 var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc()
 
+type RedirectsInfo struct {
+	Urls   []string `json:"urls"`
+	Length int      `json:"length"`
+	Time   string   `json:"time"`
+}
+
 func helpPanel() {
 	fmt.Println(`Usage of gr-openredirects:
-    -u)       url to check open redirect (i.e. https://example.com/?foo=FUZZ)
-    -l)       file containing a list of urls to check open redirects (one url per line)
-    -k)       keyword to replace in urls with payloads (default=FUZZ)
-    -p)       file containing a list of payloads (if not especified, default payloads are used)
-    -w)       number of concurrent workers (default=15)
-    -m)       requests method (GET, POST, PUT...)
-    --proxy)  proxy to send requests through (i.e. http://127.0.0.1:8080)
-    -a)       user agent to include on requests (default=none)
-    -t)       milliseconds to wait before each request timeout (default=5000)
-    -o)       file to write vulnerable urls into
-    -c)       use color on output
-    -q)       don't print banner nor logging, only output
-    -h)       print help panel
+  INPUT:
+    -u, -url string       url to check open redirect (i.e. https://example.com/?foo=FUZZ)
+    -l, -list string      file containing a list of urls to check open redirects (one url per line)
+
+  OUTPUT:
+    -o, -output string          file to write vulnerable urls into
+    -oj, -output-json string    file to write vulnerable urls into (JSON format)
+
+  PAYLOADS:
+    -k, -keyword string           keyword to replace in urls with payloads (default=FUZZ)
+    -pl, -payloads-list string    file containing a list of payloads (if not especified, default payloads are used)
+    -s, -skip                     only test 1 payload (useful for in-mass testing)
+
+  CONFIG:
+    -w, -workers int        number of concurrent workers (default=15)
+    -m, -method string      requests method (GET, POST, PUT...)
+    -p, -proxy string       proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -a, -agent string       user agent to include on requests (default=none)
+    -t, -timeout int        milliseconds to wait before each request timeout (default=5000)
+    -c, -color              use color on output
+    -q, -quiet              print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
     gr-openredirects -u https://example.com/?foo=FUZZ -c
     gr-openredirects -u https://example.com/?foo=TEST -k TEST
-    gr-openredirects -l urls.txt -p payloads.txt -o vulnerable.txt
+    gr-openredirects -l urls.txt -skip
+    gr-openredirects -l urls.txt -pl payloads.txt -o vulnerable.txt
     cat urls.txt | gr-openredirects
     `)
 }
 
+var found_redirects []string
+
+// nolint: gocyclo
 func main() {
 	var url string
 	var list string
 	var keyword string
 	var payloads_list string
 	var workers int
+	var skip bool
 	var method string
 	var proxy string
 	var timeout int
 	var user_agent string
 	var output string
+	var json_output string
 	var use_color bool
 	var quiet bool
+	var version bool
 	var help bool
 	var stdin bool
 
-	flag.StringVar(&url, "u", "", "url to check open redirect (i.e. https://example.com/?foo=FUZZ)")
-	flag.StringVar(&list, "l", "", "file containing a list of urls to check open redirects (one url per line)")
-	flag.StringVar(&keyword, "k", "FUZZ", "keyword to replace in urls with payloads")
-	flag.StringVar(&payloads_list, "p", "", "file containing a list of payloads (if not especified, default payloads are used)")
-	flag.IntVar(&workers, "w", 10, "number of concurrent workers")
-	flag.StringVar(&method, "m", "GET", "requests method (GET, POST, PUT...)")
-	flag.StringVar(&proxy, "proxy", "", "proxy to send requests through (i.e. http://127.0.0.1:8080)")
-	flag.IntVar(&timeout, "t", 4000, "milliseconds to wait before reach request timeout")
-	flag.StringVar(&output, "o", "", "save vulnerable urls to file")
-	flag.StringVar(&user_agent, "a", "", "user agent to include on requests (default=none)")
-	flag.BoolVar(&use_color, "c", false, "use color on output")
-	flag.BoolVar(&quiet, "q", false, "don't print banner nor logging, only output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&url, "u", "", "")
+	flag.StringVar(&url, "url", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&keyword, "k", "FUZZ", "")
+	flag.StringVar(&keyword, "keyword", "FUZZ", "")
+	flag.StringVar(&payloads_list, "pl", "", "")
+	flag.StringVar(&payloads_list, "payloads-list", "", "")
+	flag.BoolVar(&skip, "s", false, "")
+	flag.BoolVar(&skip, "skip", false, "")
+	flag.IntVar(&workers, "w", 10, "")
+	flag.IntVar(&workers, "workers", 10, "")
+	flag.StringVar(&method, "m", "GET", "")
+	flag.StringVar(&method, "method", "GET", "")
+	flag.StringVar(&proxy, "p", "", "")
+	flag.StringVar(&proxy, "proxy", "", "")
+	flag.IntVar(&timeout, "t", 4000, "")
+	flag.IntVar(&timeout, "timeout", 4000, "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.StringVar(&user_agent, "a", "", "")
+	flag.StringVar(&user_agent, "agent", "", "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
 
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
+
 	if !quiet {
-		fmt.Print(core.Banner())
+		fmt.Println(core.Banner())
 	}
 
 	if help {
@@ -107,64 +152,41 @@ func main() {
 
 	// if domain, list and stdin parameters are empty print help panel and exit
 	if (url == "") && (list == "") && (!stdin) {
-		fmt.Println()
 		helpPanel()
 		os.Exit(0)
 	}
 
-	var out_f *os.File
+	if payloads_list != "" && skip {
+		helpPanel()
+		core.Red("You can't use (-pl) and (-skip) at the same time", use_color)
+		os.Exit(0)
+	}
+
+	if proxy != "" {
+		os.Setenv("HTTP_PROXY", proxy)
+		os.Setenv("HTTPS_PROXY", proxy)
+	}
+
+	var txt_out *os.File
 	if output != "" {
-		out_f, err = os.Create(output)
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	// Create requests client
-	t := time.Duration(timeout) * time.Millisecond
-
-	proxy_url, err := nurl.Parse(proxy)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var transport http.Transport
-	if proxy != "" {
-		transport = http.Transport{
-			Proxy:             http.ProxyURL(proxy_url),
-			MaxIdleConns:      30,
-			IdleConnTimeout:   time.Second,
-			DisableKeepAlives: true,
-			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // Disable ssl verify
-			DialContext: (&net.Dialer{
-				Timeout:   t,
-				KeepAlive: time.Second,
-			}).DialContext,
-		}
-
-	} else {
-		transport = http.Transport{
-			MaxIdleConns:      30,
-			IdleConnTimeout:   time.Second,
-			DisableKeepAlives: true,
-			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // Disable ssl verify
-			DialContext: (&net.Dialer{
-				Timeout:   t,
-				KeepAlive: time.Second,
-			}).DialContext,
-		}
-	}
-
-	client := &http.Client{ // Create requests client
-		Transport: &transport,
-		Timeout:   t,
-	}
+	client := core.CreateHttpClientFollowRedirects(timeout)
 
 	var payloads []string
-	if payloads_list == "" {
+
+	if skip { // set unique payload if user only want to use one
+		payloads = []string{"https://bing.com"}
+
+	} else if payloads_list == "" { // set default payloads
 		payloads = core.GetPayloads()
 
-	} else {
+	} else { // get payloads from custom list
 		pf, err := os.Open(payloads_list) // Get payloads from given file
 		if err != nil {
 			log.Fatal(err)
@@ -191,7 +213,16 @@ func main() {
 	}
 
 	if !quiet {
-		fmt.Println()
+		core.Warning("Use with caution.", use_color)
+		core.Magenta("Concurrent workers: "+strconv.Itoa(workers), use_color)
+		if proxy != "" {
+			core.Magenta("Proxy: "+proxy, use_color)
+		}
+
+		if skip {
+			core.Magenta("Payload to use: https://bing.com", use_color)
+		}
+
 		core.Magenta("Checking open redirects with "+strconv.Itoa(len(payloads))+" payloads\n", use_color)
 	}
 
@@ -201,6 +232,10 @@ func main() {
 	var wg sync.WaitGroup
 
 	if url != "" {
+		if !strings.Contains(url, keyword) {
+			core.Red("Url doesn't contain keyword ("+keyword+")", use_color)
+			os.Exit(0)
+		}
 
 		_, err = http.Get(url)
 		if err != nil {
@@ -233,10 +268,11 @@ func main() {
 					if resp.StatusCode == http.StatusOK {
 						if strings.Contains(resp.Request.URL.String(), redirectTarget) {
 							fmt.Println(new_url)
+							found_redirects = append(found_redirects, new_url)
 							counter += 1
 
 							if output != "" { // Write url with payload to output file
-								_, err = out_f.WriteString(new_url + "\n")
+								_, err = txt_out.WriteString(new_url + "\n")
 								if err != nil {
 									log.Fatal(err)
 								}
@@ -287,10 +323,11 @@ func main() {
 						if resp.StatusCode == http.StatusOK {
 							if strings.Contains(resp.Request.URL.String(), redirectTarget) {
 								fmt.Println(new_url)
+								found_redirects = append(found_redirects, new_url)
 								counter += 1
 
 								if output != "" { // Write url with payload to output file
-									_, err = out_f.WriteString(new_url + "\n")
+									_, err = txt_out.WriteString(new_url + "\n")
 									if err != nil {
 										log.Fatal(err)
 									}
@@ -332,7 +369,29 @@ func main() {
 
 		close(urls_c) // Close channel
 		wg.Wait()     // and wait for urls workers wait group
+	}
 
+	if json_output != "" {
+		json_redirects := RedirectsInfo{
+			Urls:   found_redirects,
+			Length: len(found_redirects),
+			Time:   core.TimerDiff(t1).String(),
+		}
+
+		json_body, err := json.Marshal(json_redirects)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// Finally some logging to aid users
@@ -344,13 +403,13 @@ func main() {
 			core.Red("No open redirect found!", use_color)
 		}
 
-		if output != "" {
-			if counter >= 1 { // Check if at least one url was vulnerable to open redirect
-				if use_color {
-					fmt.Println("["+green("+")+"] Urls written to", output)
-				} else {
-					fmt.Println("[+] Urls written to", output)
-				}
+		if counter >= 1 { // Check if at least one url was vulnerable to open redirect
+			if output != "" {
+				core.Green("Urls written to "+output+" (TXT)", use_color)
+			}
+
+			if json_output != "" {
+				core.Green("Urls written to "+json_output+" (JSON)", use_color)
 			}
 		}
 

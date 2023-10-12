@@ -5,6 +5,8 @@ import (
 	wp "github.com/likexian/whois-parser"
 )
 
+// send WHOIS query to given domain to retrieve public info
+// Example: info, err := gorecon.Whois("hackthebox.com")
 func Whois(domain string) (wp.WhoisInfo, error) {
 	return core.Whois(domain)
 }

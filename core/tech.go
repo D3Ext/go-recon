@@ -4,13 +4,11 @@ import (
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"io/ioutil"
 	"net/http"
-	"time"
 )
 
-func GetTech(url string, timeout int) (map[string]struct{}, error) {
-	client := &http.Client{ // Create requests client
-		Timeout: time.Duration(timeout) * time.Millisecond,
-	}
+// this function send a request to given url and returns running technologies
+// Example: techs, err := GetTech("http://github.com", gorecon.DefaultClient())
+func GetTech(url string, client *http.Client) (map[string]struct{}, error) {
 
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("Connection", "close")

@@ -4,13 +4,13 @@ import (
 	"net"
 )
 
-// same as net.MX
+// same struct as net.MX
 type MX struct {
 	Host string `json:"host"`
 	Pref uint16 `json:"pref"`
 }
 
-// same as net.NS
+// same struct as net.NS
 type NS struct {
 	Host string `json:"host"`
 }
@@ -20,11 +20,14 @@ type DnsInfo struct {
 	Domain string   `json:"domain"` // given domain
 	CNAME  string   `json:"cname"`  // returns the canonical name for the given host
 	TXT    []string `json:"txt"`    // returns the DNS TXT records for the given domain name
-	MX     []MX     `json:"mx"`     //
-	NS     []NS     `json:"ns"`     //
+	MX     []MX     `json:"mx"`     // returns a slice of MX (Mail eXchanges)
+	NS     []NS     `json:"ns"`     // returns a slice of NS (Name Server)
 	Hosts  []string `json:"hosts"`  // returns a slice of given host's IPv4 and IPv6 addresses
 }
 
+// main function for DNS information gathering
+// it receives a domain and tries to find most important info
+// and returns a DnsInfo struct and an error
 func Dns(domain string) (DnsInfo, error) {
 	var dns_info DnsInfo
 

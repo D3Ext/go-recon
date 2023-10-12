@@ -4,15 +4,17 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 )
 
-// If a bypass is found it's returned
+// try different ways to bypass 403 status code urls
+// returns slice of urls with payloads on them,
+// a slice with their respective status codes, and
+// finally an error
 func Check403(url, word string, timeout int) ([]string, []int, error) {
 
 	url = strings.TrimSuffix(url, "/")
 
-	// Try to bypass 403 code with URL modifications
+	// try to bypass 403 code with URL modifications
 	url_payloads := []string{
 		url + "/" + word,
 		url + "/" + strings.ToUpper(word),
@@ -102,12 +104,9 @@ func Check403(url, word string, timeout int) ([]string, []int, error) {
 }
 
 func sendRequest(url_to_check string, timeout int) (int, error) {
-	t := time.Duration(timeout * 1000000)
-	req := http.Client{
-		Timeout: t,
-	}
+	c := CreateHttpClient(timeout)
 
-	resp, err := req.Get(url_to_check)
+	resp, err := c.Get(url_to_check)
 	if err != nil {
 		return 0, err
 	}
@@ -117,10 +116,7 @@ func sendRequest(url_to_check string, timeout int) (int, error) {
 }
 
 func sendRequestWithHeader(url_to_check string, timeout int, header, value string) (int, error) {
-	t := time.Duration(timeout * 1000000)
-	client := http.Client{
-		Timeout: t,
-	}
+	c := CreateHttpClient(timeout)
 
 	req, err := http.NewRequest("GET", url_to_check, nil)
 	if err != nil {
@@ -128,7 +124,7 @@ func sendRequestWithHeader(url_to_check string, timeout int, header, value strin
 	}
 
 	req.Header.Set(header, value)
-	resp, err := client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return 0, err
 	}

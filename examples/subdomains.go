@@ -4,39 +4,50 @@ import (
 	"fmt"
 	"github.com/D3Ext/go-recon/pkg/gorecon"
 	"log"
+	"net/http"
+	"time"
 )
 
 func main() {
-	subdomains := make(chan string)
-	timeout := 10000 // in milliseconds
+	results := make(chan string)
 
-	// Get all subdomains using Crt, HackerTarget and AlienVault
-	go gorecon.GetAllSubdomains("hackthebox.com", subdomains, timeout)
-	for sub := range subdomains {
-		fmt.Println(sub)
+	client := &http.Client{ // Create requests client
+		Timeout: 10000 * time.Millisecond,
 	}
 
-	fmt.Println("-----------")
+	// use all providers
+	providers := []string{"alienvault", "anubis", "commoncrawl", "crt", "digitorus", "hackertarget", "rapiddns", "wayback"}
 
-	subs1, err := gorecon.Crt("hackthebox.com", timeout)
+	go func() {
+		for res := range results {
+			fmt.Println(res)
+		}
+	}()
+
+	// Get all subdomains from given providers (subdomains channel is closed when all subdomains are enumerated)
+	fmt.Println("[*] Retrieving subdomains from all providers:")
+	err := gorecon.GetSubdomains("hackthebox.com", results, providers, client)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(subs1)
 
-	fmt.Println("-----------")
-
-	subs2, err := gorecon.HackerTarget("hackthebox.com", timeout)
+	fmt.Println("\n[*] Retrieving subdomains from Crt.sh:")
+	err = gorecon.Crt("hackthebox.com", results, client)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(subs2)
 
-	fmt.Println("-----------")
-
-	subs3, err := gorecon.AlienVault("hackthebox.com", timeout)
+	fmt.Println("\n[*] Retrieving subdomains from HackerTarget:")
+	err = gorecon.HackerTarget("hackthebox.com", results, client)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(subs3)
+
+	fmt.Println("\n[*] Retrieving subdomains from AlienVault:")
+	err = gorecon.AlienVault("hackthebox.com", results, client)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// do the same for the other providers
 }

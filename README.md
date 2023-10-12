@@ -33,40 +33,41 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/D3Ext/go-recon/blob/main/SPANISH.md">README in Spanish</a>
+</p>
+
 # Introduction
 
-This project started over a year ago as a simple Python script to find subdomains using SSL certs transparency and other APIs, then I decided to implement a bunch of functions to enumerate more things but it was really slow and wasn't stable so I decided to split up the project for the different tasks into multiple tools, this time in Golang and much fast. Moreover, I decided to develop this project to learn how to use concurrency and channels.
+This project started as various Golang scripts to automatically perform tedious processes and to perform external recon, between another bunch of things. Over time I polished the tools and finally decided to take it seriously, in this way I would also learn to use Golang channels and concurrency, so tools are fast and configurable.
 
-This toolkit provides tools for different purposes while performing external recon. Most functions are also available and can be used through the official package API for your own tools.
+This toolkit provides tools for different purposes while performing external recon. Most functions are also available and can be used through the official package API for your own tools. Feel free to contribute by reporting issues or discussing ideas.
 
-README in spanish [here](https://github.com/D3Ext/go-recon/blob/main/SPANISH.md)
+See [Wiki](https://github.com/D3Ext/go-recon/wiki) for further info
 
 # Tools
 
-- ***gr-subdomains*** Find all subdomains of a domain (passive)
-- ***gr-urls*** Find domain URLs from different sources
-- ***gr-probe*** Probe active subdomains (http and https)
-- ***gr-js*** Extract JS endpoints from URLs
-- ***gr-403*** Try to bypass pages that return 403 status code (multiple techniques)
-- ***gr-openredirects*** Fuzz for possible open redirects on given URLs
-- ***gr-dns*** Retrieve DNS info from domains
-- ***gr-aws*** Find S3 buckets for given domain (Work In Progress)
-- ***gr-waf*** Identify which WAF is running on a domain
-- ***gr-tech*** Identify technologies running on a URL (similar to wappalyzer)
-- ***gr-filter*** Remove duplicated URLs, useless URLs (images, css...) and more from a list of endpoints
-- ***gr-replace*** Replace given keyword or parameter value with provided value
-- ***gr-secrets*** Search for API keys and leaked secrets in html and js pages
-- ***gr-crawl*** Fastly crawl urls for gathering URLs, with custom depth and more options
-- ***gr-whois*** Perform WHOIS query against domains
+- ***gr-subdomains***: Enumerate subdomains of a domain using 8 different providers (passively)
+- ***gr-urls***: Find URLs (endpoints) of a domain from different sources (Wayback, AlienVault)
+- ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, custom concurrency and other functions
+- ***gr-403***: Try to bypass pages that return 403 status code (multiple techniques)
+- ***gr-openredirects***: Fuzz for potential open redirects on given URLs using a payload/list of payloads
+- ***gr-dns***: Retrieve DNS info from domains
+- ***gr-aws***: Enumerate S3 buckets for given domain using permutations, verify bucket lists, and more via other parameters
+- ***gr-waf***: Identify which WAF is running on a domain
+- ***gr-filter***: Remove duplicated and useless URLs from list, apply filters, create custom filter patterns, and filter output in a smart way
+- ***gr-replace***: Replace given keyword or parameter value with provided value from URLs of a list
+- ***gr-secrets***: Search for API keys and leaked secrets in HTML and JS pages
+- ***gr-crawl***: Fastly crawl urls for gathering URLs and JS endpoints, with custom depth and other options
+- ***gr-whois***: Perform WHOIS query against domains
 
 # Features
 
 - Speed and concurrency
-- Configurable via CLI arguments
-- Easy usage
+- Easy usage and configurable via CLI arguments
 - Tools can be combined between them
-- Output results to file in txt or JSON format
-- Supports STDIN and STDOUT
+- Multiple output formats (STDOUT, TXT, JSON, CSV)
+- Input as URL, domains or STDIN
 - Direct access to official package API
 - Tested on Linux
 
@@ -81,11 +82,21 @@ make
 sudo make install
 ```
 
-Install official ***go-recon*** Golang package like this:
+The binaries will be compiled and installed on PATH, so you just will have to execute it from CLI
 
 ```sh
-go get github.com/D3Ext/go-recon/pkg/go-recon
+$ gr-subdomains
 ```
+
+## Extra
+
+To install a set of custom filters/patterns and a Bash autocompletion script, you could execute the following command:
+
+```sh
+make extra
+```
+
+Then if you press TAB twice when using gr-subdomains or gr-filter, you will see the available providers and filters.
 
 # Usage
 
@@ -100,27 +111,38 @@ All tools have similar usage and CLI parameters
   __/ |     by D3Ext
  |___/      v0.1
 
-Usage of gr-secrets:
-    -u)       url to search for secrets in (i.e. https://example.com/script.js)
-    -l)       file containing a list of JS endpoints to search for secrets (one url per line)
-    -r)       custom regex to search for (i.e. apikey=secret[a-z]+)
-    -lr)      file containing a list of custom regex to search for (one regex per line)
-    -w)       number of concurrent workers (default=15)
-    -o)       output file to write secrets into
-    -a)       user agent to include on requests (default=none)
-    -c)       print colors on output
-    -t)       milliseconds to wait before each request timeout (default=5000)
-    -q)       don't print banner, only output
-    -h)       print help panel
+Usage of gr-subdomains:
+  INPUT:
+    -d, -domain string      domain to find its subdomains (i.e. example.com)
+    -l, -list string        file containing a list of domains to find their subdomains (one domain per line)
+
+  OUTPUT:
+    -o, -output string          file to write subdomains into
+    -oj, -output-json string    file to write subdomains into (JSON format)
+
+  PROVIDERS:
+    -all                      use all available providers to discover subdomains (slower than default)
+    -p, -providers string[]   providers to use for subdomain discovery (separated by comma)
+    -lp, -list-providers      list available providers
+
+  CONFIG:
+    -proxy string         proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -t, -timeout int      milliseconds to wait before each request timeout (default=5000)
+    -c, -color            print colors on output
+    -q, -quiet            print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
-    gr-secrets -u https://example.com -o secrets.txt -c
-    gr-secrets -l js.txt -w 10 -t 6000
-    gr-secrets -u https://example.com -lr regex.txt
-    cat js.txt | gr-secrets -r "secret=api_[A-Z]+"
+    gr-subdomains -d example.com -o subdomains.txt -c
+    gr-subdomains -l domains.txt -p crt,hackertarget -t 8000
+    cat domain.txt | gr-subdomains -all
+    cat domain.txt | gr-subdomains -p anubis -oj subdomains.json -c
 ```
 
-See [here](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) for real usage examples during external recon
+See [here](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) for ideas and real examples about how to use ***go-recon*** for external reconnaisance
 
 # Demo
 
@@ -134,17 +156,30 @@ See [here](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) for real usage 
 
 <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo5.png">
 
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo6.png">
+
+<img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/demo7.png">
+
 # API
+
+Install official ***go-recon*** Golang package like this:
+
+```sh
+go get github.com/D3Ext/go-recon/pkg/go-recon
+```
 
 If you want to use ***go-recon*** in your own Golang code see [here](https://github.com/D3Ext/go-recon/tree/main/examples)
 
 # TODO
 
+- ~~Parameter to control used providers~~
+- ~~CSV output~~
 - More tools and features
 - ~~Dockerfile~~
+- ~~Changelog~~
 - HTML results reports
 - More optimization
-- Compare results with other tools such as **subfinder**, **gau**, **httprobe**...
+- ~~Compare results with other tools such as **subfinder**, **gau**, **httprobe**...~~
 
 # References
 
@@ -180,6 +215,10 @@ https://github.com/hueristiq/xs3scann3r
 # Contributing
 
 See [CONTRIBUTING.md](https://github.com/D3Ext/go-recon/blob/main/CONTRIBUTING.md)
+
+# Changelog
+
+See [CHANGELOG.md](https://github.com/D3Ext/go-recon/blob/main/CHANGELOG.md)
 
 # License
 

@@ -4,15 +4,26 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
-	"net/url"
+	"strings"
 	"time"
 )
 
+// function which aids users if they want to use
+// a default client instance instead of creating a new one
+func DefaultHttpClient() *http.Client {
+	return CreateHttpClient(10000)
+}
+
+// create an http client with given timeout (in milliseconds),
+// skip tls verify and some other useful settings
+// don't follow redirects
+// Example: client := CreateHttpClient(5000)
 func CreateHttpClient(timeout int) *http.Client {
-	// Create requests client
+	// define timeout
 	t := time.Duration(timeout) * time.Millisecond
 
 	var transport = &http.Transport{
+		Proxy:             http.ProxyFromEnvironment,
 		MaxIdleConns:      30,
 		IdleConnTimeout:   time.Second,
 		DisableKeepAlives: true,
@@ -36,17 +47,13 @@ func CreateHttpClient(timeout int) *http.Client {
 	return client
 }
 
-func CreateHttpClientWithProxy(timeout int, proxy string) (*http.Client, error) {
-	// Create requests client
+// this functions does the same as CreateHttpClient() but this one follows redirects
+func CreateHttpClientFollowRedirects(timeout int) *http.Client {
+	// define timeout
 	t := time.Duration(timeout) * time.Millisecond
 
-	proxy_url, err := url.Parse(proxy)
-	if err != nil {
-		return &http.Client{}, err
-	}
-
 	var transport = &http.Transport{
-		Proxy:             http.ProxyURL(proxy_url),
+		Proxy:             http.ProxyFromEnvironment,
 		MaxIdleConns:      30,
 		IdleConnTimeout:   time.Second,
 		DisableKeepAlives: true,
@@ -57,15 +64,39 @@ func CreateHttpClientWithProxy(timeout int, proxy string) (*http.Client, error) 
 		}).DialContext,
 	}
 
-	redirect := func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse // Don't follow redirect
-	}
-
 	client := &http.Client{ // Create requests client
-		Transport:     transport,
-		CheckRedirect: redirect,
-		Timeout:       t,
+		Transport: transport,
+		Timeout:   t,
 	}
 
-	return client, nil
+	return client
+}
+
+// return current time for later chaining
+// with TimerDiff() to get elapsed time
+func StartTimer() time.Time {
+	return time.Now()
+}
+
+// this function receives a time and
+// returns difference between current time and given time
+func TimerDiff(t1 time.Time) time.Duration {
+	t2 := time.Now()
+	diff := t2.Sub(t1)
+
+	return diff.Round(10 * time.Millisecond)
+}
+
+func Version() string {
+	return "v0.1"
+}
+
+func stringInSlice(str string, slice []string) bool {
+	for _, i := range slice {
+		if strings.ToLower(str) == strings.ToLower(i) {
+			return true
+		}
+	}
+
+	return false
 }

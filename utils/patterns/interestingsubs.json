@@ -1,0 +1,18 @@
+{
+  "description": "filter for potentially interesting subdomains (i.e. admin)",
+  "flags": "-iE",
+  "patterns": [
+    "admin",
+    "jenkins",
+    "test",
+    "proxy",
+    "stage",
+    "test",
+    "dev",
+    "devops",
+    "staff",
+    "db",
+    "qa",
+    "internal"
+  ]
+}

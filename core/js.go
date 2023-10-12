@@ -11,7 +11,10 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-func GetEndpoints(urls []string, results chan string, workers int, timeout int) {
+// main function to extract JS endpoints from a list of urls
+// it receives a custom client for further customization
+// Example: go gorecon.GetEndpointsFromFile(urls, results, 15, gorecon.DefaultClient())
+func GetEndpoints(urls []string, results chan string, workers int, client *http.Client) error {
 	urls_c := make(chan string)
 
 	// start workers
@@ -20,7 +23,7 @@ func GetEndpoints(urls []string, results chan string, workers int, timeout int) 
 		wg.Add(1)
 
 		go func() {
-			FetchEndpoints(urls_c, results, "", "", timeout)
+			FetchEndpoints(urls_c, results, client)
 
 			wg.Done()
 		}()
@@ -34,15 +37,15 @@ func GetEndpoints(urls []string, results chan string, workers int, timeout int) 
 
 	close(urls_c)
 	wg.Wait()
-	close(results)
-	//out.Wait()
 
-	return
+	return nil
 }
 
-func FetchEndpoints(urls <-chan string, results chan string, user_agent string, proxy string, timeout int) {
+// this function receives urls from channel so
+// it's better for concurrency and configuration
+func FetchEndpoints(urls <-chan string, results chan string, client *http.Client) error { // nolint: gocyclo
 	for u := range urls {
-		// Check if URL is valid
+		// check if URL is valid
 		if (!strings.Contains(u, ".")) || (u == "") {
 			continue
 		}
@@ -54,21 +57,7 @@ func FetchEndpoints(urls <-chan string, results chan string, user_agent string, 
 			continue
 		}
 
-		if user_agent != "" {
-			req.Header.Add("User-Agent", user_agent)
-		}
-
-		var c *http.Client
-		if proxy == "" {
-			c = CreateHttpClient(timeout)
-		} else {
-			c, err = CreateHttpClientWithProxy(timeout, proxy)
-			if err != nil {
-				continue
-			}
-		}
-
-		resp, err := c.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			continue
 		}
@@ -81,7 +70,7 @@ func FetchEndpoints(urls <-chan string, results chan string, user_agent string, 
 
 		u, err := url.Parse(u)
 		if err != nil {
-			return
+			return err
 		}
 
 		doc.Find("script").Each(func(index int, s *goquery.Selection) {
@@ -133,4 +122,6 @@ func FetchEndpoints(urls <-chan string, results chan string, user_agent string, 
 			}
 		})
 	}
+
+	return nil
 }

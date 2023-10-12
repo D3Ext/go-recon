@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"github.com/D3Ext/go-recon/pkg/gorecon"
 	"log"
+	"net/http"
+	"time"
 )
 
 func main() {
-	timeout := 4000 // in milliseconds
+	client := &http.Client{
+		Timeout: 4000 * time.Millisecond,
+	}
 
-	techs, err := gorecon.GetTech("https://github.com", timeout)
+	techs, err := gorecon.GetTech("https://github.com", client)
 	if err != nil {
 		log.Fatal(err)
 	}

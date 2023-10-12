@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/D3Ext/go-recon/pkg/gorecon"
+	"log"
+	"net/http"
+	"time"
 )
 
 func main() {
@@ -11,13 +14,21 @@ func main() {
 
 	results := make(chan string)
 
-	workers := 15 // create 15 concurrent workers
+	workers := 4 // create 15 concurrent workers
 
-	timeout := 5000 // in milliseconds
+	client := &http.Client{
+		Timeout: 5000 * time.Millisecond,
+	}
 
-	//func GetEndpoints(urls []string, results chan string, workers int, timeout int) {}
-	go gorecon.GetEndpoints(urls, results, workers, timeout)
-	for endpoint := range results {
-		fmt.Println(endpoint)
+	go func() {
+		for endpoint := range results {
+			fmt.Println(endpoint)
+		}
+	}()
+
+	//func GetEndpoints(urls []string, results chan string, workers int, client *http.Client) {}
+	err := gorecon.GetEndpoints(urls, results, workers, client)
+	if err != nil {
+		log.Fatal(err)
 	}
 }

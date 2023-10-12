@@ -1,0 +1,14 @@
+{
+  "description": "filter for parameters potentially vulnerable to SSTI (Server Side Template Injection)",
+  "flags": "-iE",
+  "patterns": [
+    "template=",
+    "preview=",
+    "id=",
+    "view=",
+    "activity=",
+    "name=",
+    "content=",
+    "redirect="
+  ]
+}

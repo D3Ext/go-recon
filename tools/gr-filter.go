@@ -2,14 +2,22 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
 	"log"
 	"net/url"
+	nurl "net/url"
 	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -22,6 +30,13 @@ var green func(a ...interface{}) string = color.New(color.FgGreen).SprintFunc()
 var magenta func(a ...interface{}) string = color.New(color.FgMagenta).SprintFunc()
 var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc()
 
+type PatternFormat struct {
+	Description string   `json:"description,omitempty`
+	Flags       string   `json:"flags"`
+	Pattern     string   `json:"pattern,omitempty"`
+	Patterns    []string `json:"patterns,omitempty"`
+}
+
 type FilterInfo struct {
 	Urls    []string `json:"urls"`
 	Filters []string `json:"filters"`
@@ -30,32 +45,44 @@ type FilterInfo struct {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-filter:
-    -l)       file containing a list of urls to remove duplicates and useless ones (one domain per line)
-    -b)       blacklisted extensions to exclude from filtered urls, default extensions are also excluded (separated by comma) (i.e. php,js,mp3)
-    -w)       whitelisted extensions to filter for (separated by comma) (i.e. json,txt,php)
-    -f)       custom filter to use (vuln, redirects, nocontent, hasparams, noparams, hasextension, noextension)
-    -o)       file to write filtered urls into
-    -oj)      file to write filtered urls into (JSON format)
-    -c)       print colors on output
-    -q)       don't print banner nor logging, only output
-    -h)       print help panel
+  INPUT:
+    -l, -list string      file containing a list of urls to remove duplicates and useless ones (one domain per line)
+
+  OUTPUT:
+    -o, -output string          file to write filtered urls/output into
+    -oj, -output-json string    file to write filtered urls into (JSON format)
+    -oc, -output-csv string     file to write filtered urls into (CSV format)
+
+  FILTERS:
+    -f, -filter string[]    custom filters to use, separated by comma (i.e. nocontent,hasparams)
+    -lf, -list-filters      list available patterns/filters
+
+  CONFIG:
+    -b, -blacklist string[]   blacklisted extensions to exclude from filtered urls (default extensions are also excluded) (i.e. php,mp3)
+    -w, -whitelist string[]   whitelisted extensions to filter for (separated by comma) (i.e. json,txt,php)
+    -p, -params string        replace parameter values with given string (i.e. FUZZ)
+    -c, -color                print colors on output
+    -q, -quiet                print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
     gr-filter -l urls.txt -o clean.txt -c
     gr-filter -l urls.txt -b html,asp
-    gr-filter -l urls.txt -w json -x
-    gr-filter -l urls.txt -f hasparams,nocontent -o param_urls.txt -q
-    cat urls.txt | gr-filter -f vuln
+    gr-filter -l urls.txt -w zip -oj output.json
+    cat urls.txt | gr-filter -f hasparams -o param_urls.txt -q
+    cat urls.txt | gr-filter -f redirects,nocontent -p FUZZ
+    cat output.txt | gr-filter -f custom_filter
     `)
 }
 
-var vuln_params = [190]string{"file", "document", "folder", "root", "path", "pg", "style", "pdf", "template", "php_path", "doc", "page", "name", "cat", "dir", "action", "board", "date", "detail", "download", "prefix", "include", "inc", "locate", "show", "site", "type", "view", "content", "layout", "mod", "conf", "daemon", "upload", "log", "ip", "cli", "cmd", "exec", "command", "execute", "ping", "query", "jump", "code", "reg", "do", "func", "arg", "option", "load", "process", "step", "read", "function", "req", "feature", "exe", "module", "payload", "run", "print", "callback", "checkout", "checkout_url", "continue", "data", "dest", "destination", "domain", "feed", "file_name", "file_url", "folder_url", "forward", "from_url", "go", "goto", "host", "html", "image_url", "img_url", "load_file", "load_url", "login_url", "logout", "navigation", "next", "next_page", "Open", "out", "page_url", "port", "redir", "redirect", "redirect_to", "redirect_uri", "redirect_url", "reference", "return", "return_path", "return_to", "returnTo", "return_url", "rt", "rurl", "target", "to", "uri", "url", "val", "validate", "window", "q", "s", "search", "lang", "keyword", "keywords", "year", "email", "p", "jsonp", "api_key", "api", "password", "emailto", "token", "username", "csrf_token", "unsubscribe_token", "id", "item", "page_id", "month", "immagine", "list_type", "terms", "categoryid", "key", "l", "begindate", "enddate", "select", "report", "role", "update", "user", "sort", "where", "params", "row", "table", "from", "sel", "results", "sleep", "fetch", "order", "column", "field", "delete", "string", "number", "filter", "access", "admin", "dbg", "debug", "edit", "grant", "test", "alter", "clone", "create", "disable", "enable", "make", "modify", "rename", "reset", "shell", "toggle", "adm", "cfg", "open", "img", "filename", "preview", "activity"}
+// english words
+// nolint: misspell
+var text_content = [111]string{"blog", "post", "posts", "stories", "press", "magazine", "news", "articles", "opinions", "images", "comments", "updates", "interviews", "galery", "advices", "story", "stories", "current-affairs", "chronicles", "reports", "reviews", "life", "journal", "travel", "experiencies", "editorial", "publications", "texts", "writings", "tales", "announcements", "analysis", "columns", "topics", "section", "bloggers", "journalism", "notes", "blog-articles"}
 
-var text_content = [111]string{"blog", "historias", "personal", "diario", "vida", "historia", "historias", "imagenes", "galeria", "consejos", "viajes", "experiencias", "prensa", "revista", "noticias", "articulos", "informacion", "opiniones", "comentarios", "novedades", "entrevistas", "actualidad", "cronicas", "reportajes", "reseñas", "editorial", "publicaciones", "textos", "escritos", "relatos", "comunicados", "analisis", "columnas", "temas", "contenidos", "lecturas", "blogspot", "sitio", "seccion", "archivo", "blogueros", "autores", "periodismo", "notas", "articulos-de-blog", "entrevistas-destacadas", "stories", "press", "magazine", "news", "articles", "opinions", "images", "comments", "updates", "interviews", "galery", "advices", "story", "stories", "current-affairs", "chronicles", "reports", "reviews", "life", "journal", "travel", "experiencies", "editorial", "publications", "texts", "writings", "tales", "announcements", "analysis", "columns", "topics", "section", "bloggers", "journalism", "notes", "blog-articles", "featured-interviews", "histoires", "presse", "magazine", "actualites", "articles", "information", "opinions", "commentaires", "mises-a-jour", "entretiens", "actualites", "chroniques", "reportages", "critiques", "editorial", "textes", "ecrits", "annonces", "analyse", "colonnes", "contenus", "lectures", "blogueurs", "auteurs", "journalisme", "notes", "articles-de-blog", "interviews-a-la-une"}
-
-var redirects_params = [23]string{"url", "from_url", "load_url", "file_url", "page_url", "file_name", "page", "folder", "folder_url", "login_url", "img_url", "return_url", "return_to", "next", "redirect", "redirect_to", "logout", "checkout", "checkout_url", "goto", "next_page", "file", "load_file"}
-
-var useless_extensions = []string{"png", "jpeg", "gif", "jpg", "pjpeg", "svg", "jfif", "avif", "webp", "ico", "tiff", "ttf", "woff", "mp3", "avi", "mov", "mpeg", "wav", "msv", "wv", "cda", "vox", "ogg", "css", "swf"}
+var useless_extensions = []string{"png", "jpeg", "gif", "jpg", "svg", "jfif", "avif", "webp", "ico", "tif", "tiff", "ttf", "woff", "mp3", "mp4", "avi", "mov", "mpeg", "wav", "css"}
 
 var blacklist []string
 
@@ -65,32 +92,58 @@ var seen_patterns []string
 
 var seen_params []string
 
+var csv_info [][]string
+
+// nolint: gocyclo
 func main() {
 	var list string
 	var blacklist_param string
 	var whitelist_param string
-	var extensionless bool
 	var filter string
+	var list_patterns bool
+	var params_str string
 	var output string
 	var json_output string
-	var stdin bool
+	var csv_output string
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&list, "l", "", "file containing a list of urls to remove duplicates and useless ones (one url per line)")
-	flag.StringVar(&blacklist_param, "b", "", "blacklisted extensions to exclude from filtered urls, default extensions are also excluded (separated by comma) (i.e. php,js,mp3)")
-	flag.StringVar(&whitelist_param, "w", "", "whitelisted extensions to filter for (separated by comma) (i.e. json,txt,php)")
-	flag.BoolVar(&extensionless, "x", false, "remove extensionless urls (default=disabled)")
-	flag.StringVar(&filter, "f", "", "custom filter to use (vuln, hasparams, noparams)")
-	flag.StringVar(&output, "o", "", "file to write filtered urls into")
-	flag.StringVar(&json_output, "oj", "", "file to write filtered urls into (JSON format)")
-	flag.BoolVar(&quiet, "q", false, "don't print banner, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&blacklist_param, "b", "", "")
+	flag.StringVar(&blacklist_param, "blacklist", "", "")
+	flag.StringVar(&whitelist_param, "w", "", "")
+	flag.StringVar(&whitelist_param, "whitelist", "", "")
+	flag.StringVar(&filter, "f", "", "")
+	flag.StringVar(&filter, "filter", "", "")
+	flag.BoolVar(&list_patterns, "lf", false, "")
+	flag.BoolVar(&list_patterns, "list-filters", false, "")
+	flag.StringVar(&params_str, "p", "", "")
+	flag.StringVar(&params_str, "params", "", "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.StringVar(&csv_output, "oc", "", "")
+	flag.StringVar(&csv_output, "output-csv", "", "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -101,8 +154,10 @@ func main() {
 		os.Exit(0)
 	}
 
-	var counter int
-	var err error
+	if list_patterns {
+		listPatterns(quiet, use_color)
+		os.Exit(0)
+	}
 
 	// Check if stdin has value
 	fi, err := os.Stdin.Stat()
@@ -114,6 +169,91 @@ func main() {
 		stdin = false // stdin is empty
 	} else {
 		stdin = true // stdin has value
+	}
+
+	var counter int
+	var custom_filter bool
+	var url_based bool
+	var outb bytes.Buffer
+	filters := strings.Join(strings.Split(strings.TrimSpace(filter), ","), "-")
+
+	if !strings.Contains(filter, "noparam") && !strings.Contains(filter, "hasparam") && !strings.Contains(filter, "noextension") && !strings.Contains(filter, "hasextension") && !strings.Contains(filter, "nocontent") && (filter != "") {
+
+		custom_filter = true
+		// get directory where patterns are stored
+		patterns_dir, err := getPatternDir()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		filename := filepath.Join(patterns_dir, filter+".json")
+		pattern_f, err := os.Open(filename)
+		if err != nil {
+			log.Fatal(errors.New("especified pattern doesn't exist under " + patterns_dir))
+		}
+		defer pattern_f.Close()
+
+		if !quiet {
+			core.Magenta("Applying filters on given output...\n", use_color)
+		}
+
+		// parse given pattern to filter for
+		pattern := PatternFormat{}
+		dec := json.NewDecoder(pattern_f)
+		err = dec.Decode(&pattern)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var patterns_to_filter string
+		if len(pattern.Patterns) > 0 {
+			patterns_to_filter = "(" + strings.Join(pattern.Patterns, "|") + ")"
+		} else if pattern.Pattern != "" {
+			patterns_to_filter = pattern.Pattern
+		} else {
+			log.Fatal(errors.New("empty patterns to filter for"))
+		}
+
+		var cmd *exec.Cmd
+		operator := "grep"
+		if stdin {
+			cmd = exec.Command(operator, pattern.Flags, patterns_to_filter)
+		} else {
+			cmd = exec.Command(operator, pattern.Flags, patterns_to_filter, list)
+		}
+
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = &outb // save output on buffer for later processing if output is a list of urls
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	}
+
+	output_slice := strings.Split(outb.String(), "\n")
+
+	if custom_filter {
+		if isValidUrl(output_slice[0]) && isValidUrl(output_slice[1]) {
+			url_based = true
+		} else if len(output_slice) >= 2 && isValidUrl(output_slice[0]) { // if a low number of urls are the results, treat them like a url-based output
+			url_based = true
+		} else {
+			if outb.String() != "" {
+				fmt.Println(outb.String())
+
+				if output != "" {
+					txt_out, err := os.Create(output)
+					if err != nil {
+						log.Fatal(err)
+					}
+
+					_, err = txt_out.WriteString(outb.String())
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+			} else {
+				core.Red("No output results returned from filter", use_color)
+			}
+		}
 	}
 
 	// if domain, list and stdin parameters are empty print help panel and exit
@@ -130,14 +270,9 @@ func main() {
 	}
 
 	// define variables which will be used to write results to file
-	var out_f *os.File
+	var txt_out *os.File
 	if output != "" {
-		out_f, err = os.Create(output)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else if json_output != "" {
-		out_f, err = os.Create(json_output)
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -146,32 +281,16 @@ func main() {
 	// before doing anything, check if invalid filter or filters are provided
 	if filter != "" {
 		if strings.Contains(filter, "hasparam") && strings.Contains(filter, "noparam") {
-			core.Red("[-] Invalid filters provided! hasparam and noparam can't be used at the same time", use_color)
+			core.Red("Invalid filters provided! hasparam and noparam can't be used at the same time", use_color)
 			os.Exit(0)
 
 		} else if strings.Contains(filter, "hasextension") && strings.Contains(filter, "noextension") {
 			core.Red("Invalid filters provided! hasextension and noextension can't be used at the same time", use_color)
 			os.Exit(0)
-
-		} else if strings.Contains(filter, "vuln") && strings.Contains(filter, "noparam") {
-			core.Red("Invalid filters provided! vuln and noparam can't be used at the same time", use_color)
-			os.Exit(0)
-		}
-
-		if !strings.Contains(filter, "vuln") &&
-			!strings.Contains(filter, "hasparam") &&
-			!strings.Contains(filter, "noparam") &&
-			!strings.Contains(filter, "hasextension") &&
-			!strings.Contains(filter, "noextension") &&
-			!strings.Contains(filter, "nocontent") &&
-			!strings.Contains(filter, "redirect") {
-
-			core.Red("Invalid filter/s provided!", use_color)
-			os.Exit(0)
 		}
 	}
 
-	if !quiet {
+	if !quiet && !custom_filter {
 		core.Magenta("Removing duplicated urls and applying filters...\n", use_color)
 	}
 
@@ -197,22 +316,28 @@ func main() {
 		whitelist = append(whitelist, whitelist_param)
 	}
 
-	var f *os.File
-	if list != "" { // get file descriptor from given file or stdin
-		f, err = os.Open(list)
+	var urls []string
+
+	if list != "" && !custom_filter { // get file descriptor from given file or stdin
+		f, err := os.Open(list)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer f.Close()
 
-	} else if stdin {
-		f = os.Stdin
-	}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			urls = append(urls, scanner.Text())
+		}
 
-	var urls []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		urls = append(urls, scanner.Text())
+	} else if stdin && !custom_filter {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			urls = append(urls, scanner.Text())
+		}
+
+	} else if (stdin || list != "") && custom_filter && url_based {
+		urls = output_slice // if custom filter was provided and it's url based, set urls value to each each url of output
 	}
 
 	final_urls := make(map[string]string)
@@ -229,60 +354,7 @@ func main() {
 			continue
 		}
 
-		pos := strings.LastIndexByte(u.Path, '.')
-		// if url has no extension and "hasextension" filter is provided, skip to next iteration
-		if (pos == -1) && (strings.Contains(filter, "hasextension")) {
-			continue
-
-			// if url has extension and "noextension" filter is provided, skip to next iteration
-		} else if (pos != -1) && (strings.Contains(filter, "noextension")) {
-			continue
-
-			// if url has no parameters and "vuln" filter is provided, skip to next iteration
-		} else if (len(u.RawQuery) == 0) && (strings.Contains(filter, "vuln")) {
-			continue
-
-			// if url has no parameters and "redirects" filter is provided, skip to next  iteration
-		} else if (len(u.RawQuery) == 0) && (strings.Contains(filter, "redirect")) {
-			continue
-		}
-
-		// now create path regex-based patterns to exclude number-based urls
-		// i.e. http://example.com/dir/11/index.html and http://example.com/dir/06/index.html
-		pattern := createPattern(u.Path) // create pattern
-
-		if !patternExists(pattern) { // check if current pattern already has been created and added to array
-			seen_patterns = append(seen_patterns, pattern) // save pattern for later so integer based urls can be removed as expected
-
-		} else if checkPattern(u.Path) && (len(u.Query()) == 0) { // check if pattern matches with path
-			continue
-		}
-
-		extension := strings.ToLower(u.Path[pos+1:]) // get extension (.php, .html, .js, .png ...)
-
-		if pos != -1 { // enter here if url has extension
-			if len(blacklist) != 0 { // check if blacklists array has value
-				if checkExtension(extension, blacklist) { // if function returns true, skip this url (blacklisted extension was found)
-					continue
-				}
-
-				if checkExtension(extension, useless_extensions) { // also exclude urls with default extensions (images, audio, css...)
-					continue
-				}
-
-			} else if len(whitelist) != 0 { // check if whitelist array has value
-				if !checkExtension(extension, whitelist) { // if function returns false means that extension isn't in whitelist array (skip this url)
-					continue
-				}
-
-			} else if checkExtension(extension, useless_extensions) { // if it's a "useless" extension continue over next url
-				continue
-			}
-		}
-
-		// at this point all the extensions checks are done (blacklist, whitelist and extensionless urls)
-		// now check if filters were especified and if so, apply them
-
+		// first of all check default filters if they were especified
 		if strings.Contains(filter, "nocontent") { // enter here if "nocontent" filter is especified
 			// check if any url dir is in text_content array
 			text_found := 0
@@ -314,12 +386,6 @@ func main() {
 			}
 		}
 
-		if strings.Contains(filter, "redirect") { // enter here if "redirect" filter is especified
-			if len(u.RawQuery) == 0 {
-				continue
-			}
-		}
-
 		if strings.Contains(filter, "hasparam") { // enter here if "hasparams" filter is especified
 			if len(u.RawQuery) == 0 {
 				continue
@@ -332,15 +398,58 @@ func main() {
 			}
 		}
 
-		if strings.Contains(filter, "vuln") {
-			if len(u.RawQuery) == 0 {
+		pos := strings.LastIndexByte(u.Path, '.')
+		// if url has no extension and "hasextension" filter is provided, skip to next iteration
+		if (pos == -1) && (strings.Contains(filter, "hasextension")) {
+			continue
+
+			// if url has extension and "noextension" filter is provided, skip to next iteration
+		} else if (pos != -1) && (strings.Contains(filter, "noextension")) {
+			continue
+		}
+
+		extension := strings.ToLower(u.Path[pos+1:]) // get extension (php, html, js, png ...)
+
+		// check if last url directory is a common useless js or css file (i.e. /js/chunk-7f801243.858.js)
+		last_dir := strings.Split(u.Path, "/")[len(strings.Split(u.Path, "/"))-1]
+		if extension == "js" && (strings.HasPrefix(last_dir, "chunk-") || strings.HasPrefix(last_dir, "app.") || strings.HasSuffix(last_dir, ".min.js")) {
+			continue
+		}
+
+		// now create path regex-based patterns to exclude number-based urls
+		// i.e. http://example.com/dir/11/index.html and http://example.com/dir/06/index.html
+		pattern := createPattern(u.Path) // create pattern
+
+		if !patternExists(pattern) { // check if current pattern already has been created and added to array
+			seen_patterns = append(seen_patterns, pattern) // save pattern for later so integer based urls can be removed as expected
+
+		} else if checkPattern(u.Path) && (len(u.Query()) == 0) { // check if pattern matches with path
+			continue
+		}
+
+		if pos != -1 { // enter here if url has extension
+			if len(blacklist) != 0 { // check if blacklists array has value
+				if checkExtension(extension, blacklist) { // if function returns true, skip this url (blacklisted extension was found)
+					continue
+				}
+
+				if checkExtension(extension, useless_extensions) { // also exclude urls with default extensions (images, audio, css...)
+					continue
+				}
+
+			} else if len(whitelist) != 0 { // check if whitelist array has value
+				if !checkExtension(extension, whitelist) { // if function returns false means that extension isn't in whitelist array (skip this url)
+					continue
+				}
+
+			} else if checkExtension(extension, useless_extensions) { // if it's a "useless" extension continue over next url
 				continue
 			}
 		}
 
+		// at this point all the extensions checks are done (blacklist, whitelist and extensionless urls)
 		// now start processing url params and applying "vuln" filter if is especified
 		key := u.Host + u.Path
-		var vuln_found int
 
 		if len(u.RawQuery) > 0 { // enter here if url has parameters
 			// get query parameters
@@ -348,108 +457,54 @@ func main() {
 
 			i := 0
 			for k := range u.Query() { // iterate over parameter names (i.e. page, id, query)
-				// check vuln filter
-				if strings.Contains(filter, "vuln") { // perform logic if filter is especified
-					for _, v := range vuln_params {
-						if v == k { // potential vuln param
-							queryParams[i] = k
-							vuln_found = 1
-							break
-						}
-					}
-
-					if vuln_found == 1 {
-						break
-					}
-
-				} else if strings.Contains(filter, "redirect") {
-					for _, v := range redirects_params {
-						if v == k { // potential redirects param
-							queryParams[i] = k
-							vuln_found = 1
-							break
-						}
-					}
-
-					if vuln_found == 1 {
-						break
-					}
-
-				} else {
+				if params_str == "" {
 					queryParams[i] = k
+				} else {
+					queryParams[i] = k + "=FUZZ"
 				}
 
 				i++
 			}
 			//sort.Strings(queryParams)
 
-			if (strings.Contains(filter, "vuln")) && (vuln_found == 1) { // check if vuln parameter was found
-				for _, p := range queryParams {
-					seen_params = append(seen_params, p)
-				}
-
-			} else if (strings.Contains(filter, "redirect")) && (vuln_found == 1) {
-				for _, p := range queryParams {
-					seen_params = append(seen_params, p)
-				}
-
-			} else if !checkParams(queryParams) { // if iteration query parameters have been already seen, jump to next one
-				for _, p := range queryParams {
-					seen_params = append(seen_params, p)
-				}
-
-			} else {
+			// at this point if any of the query parameters aren't present on seen_params, add it
+			if checkParams(queryParams) == true { // if iteration query parameters have been already seen, jump to next one
 				continue
 			}
 
 			key += "?" + strings.Join(queryParams, "&")
 		}
 
-		/*// now create path regex-based patterns to exclude number-based urls
-		  // i.e. http://example.com/dir/11/index.html and http://example.com/dir/06/index.html
-		  pattern := createPattern(u.Path) // create pattern
-
-		  if !patternExists(pattern) { // check if current pattern already has been created and added to array
-		    seen_patterns = append(seen_patterns, pattern) // save pattern for later so integer based urls can be removed as expected
-		    //fmt.Println(pattern, "-", seen_patterns)
-
-		  } else if checkPattern(u.Path) && more_params != true { // check if pattern matches with path
-		    //fmt.Println(pattern, "-", seen_patterns)
-		    continue
-		  }*/
-
-		if (strings.Contains(filter, "vuln")) || (strings.Contains(filter, "redirect")) { // ensure that non vulnerable urls are excluded
-			if vuln_found != 1 {
-				continue
-			}
-		}
-
 		val, ok := final_urls[key]
 		if ok {
 			if u.Scheme == "https" && strings.HasPrefix(val, "http:") {
-				fmt.Println(uri) // print url
-				filtered_urls = append(filtered_urls, uri)
-
-				if output != "" { // if output is especified, write urls to file
-					_, err = out_f.WriteString(uri + "\n")
-					if err != nil {
-						log.Fatal(err)
-					}
+				if params_str == "" {
+					fmt.Println(uri) // print url
+				} else {
+					fmt.Println(u.Scheme + "://" + key)
 				}
+				filtered_urls = append(filtered_urls, uri)
+				csv_info = append(csv_info, []string{uri, filters})
 
 				counter += 1
 			}
 		} else {
-			fmt.Println(uri) // print url
-			filtered_urls = append(filtered_urls, uri)
-
-			if output != "" { // if output is especified, write urls to file
-				_, err = out_f.WriteString(uri + "\n")
-				if err != nil {
-					log.Fatal(err)
-				}
+			if params_str != "" {
+				uri = u.Scheme + "://" + key
 			}
+
+			fmt.Println(uri)
+			filtered_urls = append(filtered_urls, uri)
+			csv_info = append(csv_info, []string{uri, filters})
+
 			counter += 1
+		}
+
+		if output != "" { // if output is especified, write urls to file
+			_, err = txt_out.WriteString(uri + "\n")
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 
@@ -465,44 +520,62 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err = out_f.WriteString(string(json_body))
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	if counter == 0 { // check if no url was filtered
-		core.Red("No urls found", use_color)
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"urls", "filters"}
+		writer.Write(headers)
+		for _, row := range csv_info {
+			writer.Write(row)
+		}
 	}
 
 	// finally add some logging to aid users
 	if !quiet {
 		if counter >= 1 {
-			if use_color {
-				fmt.Println("\n["+green("+")+"]", counter, "unique urls found")
+			fmt.Println()
+			if !custom_filter {
+				core.Green(strconv.Itoa(counter)+" unique urls found", use_color)
 			} else {
-				fmt.Println("\n[+]", counter, "unique urls found")
+				core.Green(strconv.Itoa(counter)+" urls processed", use_color)
 			}
 
 			if output != "" {
-				core.Green("Urls written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Urls written to "+json_output, use_color)
+				core.Green("Urls written to "+output+" (TXT)", use_color)
 			}
+
+			if json_output != "" {
+				core.Green("Urls written to "+json_output+" (JSON)", use_color)
+			}
+
+			if csv_output != "" {
+				core.Green("Urls written to "+csv_output+" (CSV)", use_color)
+			}
+		} else if counter == 0 && url_based {
+			core.Red("No urls found", use_color)
 		}
 
 		if use_color {
-			if counter >= 1 {
-				fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			} else {
-				fmt.Println("\n["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			}
+			fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
 		} else {
-			if counter >= 1 {
-				fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
-			} else {
-				fmt.Println("\n[+] Elapsed time:", core.TimerDiff(t1))
-			}
+			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
 		}
 	}
 }
@@ -512,6 +585,89 @@ func main() {
 TLDR; Auxiliary functions
 
 */
+
+func getPatternDir() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(usr.HomeDir, ".config/go-recon/patterns/")
+	_, err = os.Stat(path)
+	if !os.IsNotExist(err) {
+		return path, nil
+	}
+
+	return filepath.Join(usr.HomeDir, ".config/go-recon/patterns/"), nil
+}
+
+func listPatterns(quiet, use_color bool) {
+	if !quiet {
+		core.Magenta("Available patterns:", use_color)
+		fmt.Println("\tDEFAULT:")
+		fmt.Println("\t  nocontent: exclude urls that are likely to contain human content (i.e. blogs, stories, articles...)")
+		fmt.Println("\t  hasparams: filter only for urls that have parameters (i.e. http://example.com/?p=123)")
+		fmt.Println("\t  noparams: exclude urls that have parameters (i.e. http://example.com/blog)")
+		fmt.Println("\t  hasextension: filter only for urls that have extensions (i.e. http://example.com/index.php)")
+		fmt.Println("\t  noextension: exclude urls that have extensions (i.e. http://example.com/blog)\n")
+	} else {
+		fmt.Println("nocontent\nhasparams\nnoparams\nhasextension\nnoextension")
+	}
+
+	patterns_dir, err := getPatternDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	files, err := filepath.Glob(patterns_dir + "/*.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if !quiet {
+		fmt.Println("\tCUSTOM:")
+	}
+	for _, f := range files {
+		pattern_name := f[len(patterns_dir)+1 : len(f)-5]
+
+		f, err := os.Open(filepath.Join(patterns_dir, pattern_name+".json"))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+
+		p := PatternFormat{}
+		dec := json.NewDecoder(f)
+		err = dec.Decode(&p)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if !quiet {
+			if p.Description != "" {
+				fmt.Println("\t  " + pattern_name + ": " + p.Description)
+			} else {
+				fmt.Println("\t  " + pattern_name)
+			}
+		} else {
+			fmt.Println(pattern_name)
+		}
+	}
+}
+
+func isValidUrl(toTest string) bool {
+	_, err := nurl.ParseRequestURI(toTest)
+	if err != nil {
+		return false
+	}
+
+	u, err := nurl.Parse(toTest)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+
+	return true
+}
 
 func createPattern(path string) string {
 	// creates patterns for URLs with integers in them
@@ -554,30 +710,62 @@ func patternExists(pattern string) bool {
 
 func checkParams(params []string) bool {
 	if len(seen_params) == 0 {
-		return false
-	}
+		for _, p := range params {
+			seen_params = append(seen_params, p)
+		}
 
-	if len(params) > len(seen_params) { // if it has more params than already seen, it's a unique url
 		return false
 	}
 
 	param_length := len(params)
 	counter := 0
+	var params_to_append []string
 
 	for _, i := range seen_params {
+		//fmt.Println(i)
 		for _, p := range params {
+			//fmt.Println("  " + p)
 			if i == p {
+				//fmt.Println("Matched!")
+				params_to_append = append(params_to_append, p)
 				counter += 1
-				//return true
+				continue
 			}
 		}
 	}
 
-	if counter == param_length {
+	results := diffSlices(params, params_to_append)
+	for _, r := range results {
+		//fmt.Println("Appending", r, "to", seen_params)
+		seen_params = append(seen_params, r)
+	}
+
+	//fmt.Println("Matched params:", counter, "of", param_length)
+	if counter >= param_length {
 		return true
 	} else {
 		return false
 	}
+}
+
+func diffSlices(slice1 []string, slice2 []string) []string {
+	// Create a map to store the elements of slice2 for efficient lookup
+	slice2Map := make(map[string]bool)
+	for _, str := range slice2 {
+		slice2Map[str] = true
+	}
+
+	// Create a result slice to store strings not in slice2
+	result := []string{}
+
+	// Iterate through slice1 and add elements not present in slice2 to the result slice
+	for _, str := range slice1 {
+		if !slice2Map[str] {
+			result = append(result, str)
+		}
+	}
+
+	return result
 }
 
 func checkExtension(extension string, array_to_check []string) bool {

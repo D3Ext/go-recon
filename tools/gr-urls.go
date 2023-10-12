@@ -6,14 +6,10 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"io"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/D3Ext/go-recon/core"
 )
@@ -32,19 +28,28 @@ type UrlsInfo struct {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-urls:
-    -d)       domain to retrieve a bunch of urls from different sources (i.e. example.com)
-    -w)       number of concurrent workers (default=2)
-    -o)       file to write urls into
-    -oj)      file to write urls into (JSON format)
-    -r)       retrieve urls just for given domain without subdomains (default=disabled)
-    -t)       milliseconds to wait before each request timeout (default=15000)
-    -c)       print colors on output
-    -q)       don't print banner, only output
-    -h)       print help panel
+  INPUT:
+    -d, -domain string      domain to retrieve a bunch of urls from different sources (i.e. example.com)
+
+  OUTPUT:
+    -o, -output string          file to write urls into
+    -oj, -output-json string    file to write urls into (JSON format)
+
+  CONFIG:
+    -nr, -no-recursive    retrieve urls just for given domain, without subdomains (default=disabled)
+    -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -w, -workers int      number of concurrent workers (default=2)
+    -t, -timeout int      milliseconds to wait before each request timeout (default=15000)
+    -c, -color            print colors on output
+    -q, -quiet            print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
     gr-urls -d example.com -o urls.txt
-    gr-urls -d example.com -r
+    gr-urls -d example.com -nr 
     echo "example.com" | gr-urls
     `)
 }
@@ -53,30 +58,50 @@ var found_urls []string
 var current_url string
 var counter int
 
+// nolint: gocyclo
 func main() {
 	var domain string
 	var workers int
+	var proxy string
 	var output string
 	var json_output string
 	var recursive bool
-	var stdin bool
 	var timeout int
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&domain, "d", "", "domain to retrieve a bunch of urls from different sources (i.e. example.com)")
-	flag.IntVar(&workers, "w", 2, "number of concurrent workers")
-	flag.StringVar(&output, "o", "", "file to write urls into")
-	flag.StringVar(&json_output, "oj", "", "file to write urls into (JSON format)")
-	flag.BoolVar(&recursive, "r", false, "retrieve urls just for given domain without subdomains (default=disabled)")
-	flag.IntVar(&timeout, "t", 15000, "milliseconds to wait before each request timeout")
-	flag.BoolVar(&quiet, "q", false, "don't print banner, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&domain, "d", "", "")
+	flag.StringVar(&domain, "domain", "", "")
+	flag.IntVar(&workers, "w", 2, "")
+	flag.IntVar(&workers, "workers", 2, "")
+	flag.StringVar(&proxy, "p", "", "")
+	flag.StringVar(&proxy, "proxy", "", "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.BoolVar(&recursive, "nr", false, "")
+	flag.BoolVar(&recursive, "no-recursive", false, "")
+	flag.IntVar(&timeout, "t", 15000, "")
+	flag.IntVar(&timeout, "timeout", 15000, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -115,14 +140,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	var out_f *os.File
+	if proxy != "" {
+		os.Setenv("HTTP_PROXY", proxy)
+		os.Setenv("HTTPS_PROXY", proxy)
+	}
+
+	var txt_out *os.File
 	if output != "" {
-		out_f, err = os.Create(output)
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else if json_output != "" {
-		out_f, err = os.Create(json_output)
+		txt_out, err = os.Create(output)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -139,12 +164,17 @@ func main() {
 				Time:   core.TimerDiff(t1).String(),
 			}
 
+			json_out, err := os.Create(json_output)
+			if err != nil {
+				log.Fatal(err)
+			}
+
 			json_body, err := json.Marshal(json_urls)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			_, err = out_f.WriteString(string(json_body))
+			_, err = json_out.WriteString(string(json_body))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -153,7 +183,8 @@ func main() {
 	}()
 
 	if !quiet {
-		core.Magenta("Gathering urls...\n", use_color)
+		core.Warning("Use with caution.", use_color)
+		core.Magenta("Gathering "+domain+" urls...\n", use_color)
 	}
 
 	if recursive {
@@ -162,68 +193,29 @@ func main() {
 		recursive = true
 	}
 
-	//results := make(chan string) // urls will be sent through this channel
-	var wg sync.WaitGroup
-
 	client := core.CreateHttpClient(timeout)
 
-	var max_page int
-	var page_url string
+	results := make(chan string)
 
-	if !recursive {
-		page_url = "http://web.archive.org/cdx/search/cdx?url=" + domain + "&showNumPages=true"
-	} else {
-		page_url = "http://web.archive.org/cdx/search/cdx?url=*." + domain + "&showNumPages=true"
-	}
+	go func() {
+		for res := range results {
+			fmt.Println(res)
+			counter += 1
+			found_urls = append(found_urls, res)
 
-	req, err := http.NewRequest("GET", page_url, nil)
-	if err != nil {
-		core.Red("WaybackMachine seems to be slow or down, try again", use_color)
-		log.Fatal(err)
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		core.Red("WaybackMachine seems to be slow or down, try again", use_color)
-		log.Fatal(err)
-	}
-
-	raw, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-	}
-
-	max_page, err = strconv.Atoi(strings.TrimSuffix(string(raw), "\n"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var rangeSize int // split number of pages between workers to get the total number of iterations
-
-	if max_page%workers == 0 { // check if workers is multiple of max_page
-		rangeSize = max_page / workers
-
-	} else if (max_page%workers != 0) && (workers > 1) { // if not, subtract 1 or add 5 as maximum to get a
-		for i := -1; i <= 5; i++ {
-			if max_page%(workers+i) == 0 {
-				workers = workers + i
-				break
+			if output != "" {
+				_, err = txt_out.WriteString(res + "\n")
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
+	}()
 
-		rangeSize = max_page / workers
-
-	} else if (max_page >= 1) && (max_page <= 6) {
-		rangeSize = 10
-		workers = 1
+	err = core.GetAllUrls(domain, results, client, recursive)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	for i := 0; i < workers; i++ { // create n workers
-		wg.Add(1)
-
-		go worker(domain, client, recursive, rangeSize*i, rangeSize*(i+1), &wg, output, out_f)
-	}
-
-	wg.Wait()
 
 	if json_output != "" {
 		json_urls := UrlsInfo{
@@ -237,120 +229,39 @@ func main() {
 			log.Fatal(err)
 		}
 
-		_, err = out_f.WriteString(string(json_body))
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
 	if !quiet {
-		if (output != "" || json_output != "") && (counter >= 1) {
-			fmt.Println()
+		fmt.Println()
+		if counter >= 1 {
 			if output != "" {
-				core.Green("Urls written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Urls written to "+json_output, use_color)
-			}
-			if use_color {
-				fmt.Println("["+green("+")+"]", cyan(counter), "urls obtained")
-			} else {
-				fmt.Println("[+]", counter, "urls obtained")
+				core.Green("Urls written to "+output+" (TXT)", use_color)
 			}
 
-		} else if (output == "") && (json_output == "") {
-			if use_color {
-				fmt.Println("\n["+green("+")+"]", cyan(counter), "urls obtained")
-			} else {
-				fmt.Println("\n[+]", counter, "urls obtained")
+			if json_output != "" {
+				core.Green("Urls written to "+json_output+" (JSON)", use_color)
 			}
 		}
 
 		if use_color {
-			if output != "" || json_output != "" || counter >= 1 {
-				fmt.Println("["+green("+")+"] Elapsed time:", green(strings.ReplaceAll(core.TimerDiff(t1).String(), "m", "m ")))
-			} else {
-				fmt.Println("\n["+green("+")+"] Elapsed time:", green(strings.ReplaceAll(core.TimerDiff(t1).String(), "m", "m ")))
-			}
+			fmt.Println("["+green("+")+"]", cyan(counter), "urls obtained")
 		} else {
-			if output != "" || json_output != "" || counter >= 1 {
-				fmt.Println("[+] Elapsed time:", strings.ReplaceAll(core.TimerDiff(t1).String(), "m", "m "))
-			} else {
-				fmt.Println("\n[+] Elapsed time:", strings.ReplaceAll(core.TimerDiff(t1).String(), "m", "m "))
-			}
+			fmt.Println("[+]", counter, "urls obtained")
+		}
+
+		if use_color {
+			fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1).String()))
+		} else {
+			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1).String())
 		}
 	}
-}
-
-func worker(domain string, client *http.Client, recursive bool, start int, end int, wg *sync.WaitGroup, output string, out_f *os.File) {
-	var err_counter int
-
-	for i := start; i < end; i++ {
-
-		if err_counter >= 5 {
-			break
-		}
-
-		if !recursive {
-			current_url = "http://web.archive.org/cdx/search/cdx?url=" + domain + "/*&output=json&collapse=urlkey&page=" + strconv.Itoa(i)
-		} else {
-			current_url = "http://web.archive.org/cdx/search/cdx?url=*." + domain + "/*&output=json&collapse=urlkey&page=" + strconv.Itoa(i)
-		}
-		//fmt.Println(current_url)
-
-		req, err := http.NewRequest("GET", current_url, nil)
-		if err != nil {
-			err_counter += 1
-			continue
-		}
-
-		res, err := client.Do(req)
-		if err != nil {
-			err_counter += 1
-			continue
-		}
-		defer res.Body.Close()
-
-		raw, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			err_counter += 1
-			continue
-		}
-
-		if err_counter >= 5 {
-			break
-		}
-
-		var wrapper [][]string
-		err = json.Unmarshal(raw, &wrapper)
-		if err != nil {
-			err_counter += 1
-			continue
-		}
-
-		if err_counter >= 5 {
-			break
-		}
-
-		skip := true
-		for _, urls := range wrapper {
-			if skip {
-				skip = false
-				continue
-			}
-
-			fmt.Println(urls[2])
-			found_urls = append(found_urls, urls[2])
-			counter += 1
-			if output != "" {
-				_, err = out_f.WriteString(urls[2] + "\n")
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-
-		//fmt.Println(current_url, "- succeed!")
-	}
-
-	wg.Done()
 }

@@ -1,11 +1,10 @@
-# use a slim base image
-FROM python:3.8-slim
+FROM golang:1.19
 
-# set the working directory
+# set work directory
 WORKDIR /app
 
-# install git and golang
-RUN apt-get update && apt-get install -y git golang
+# update packages and install git
+RUN apt-get update && apt-get install -y git
 
 # clone go-recon repository
 RUN git clone https://github.com/D3Ext/go-recon

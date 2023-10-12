@@ -23,17 +23,25 @@ var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc(
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-whois:
-    -d)       domain to send whois query against (i.e. example.com)
-    -l)       file containing a list of domains to send whois queries to (one domain per line)
-    -o)       file to write results into (JSON format)
-    -c)       use colors on output (recommended)
-    -q)       don't print banner
-    -v)       print more information
-    -h)       print help panel
-    --debug)  print raw query output (use this if provided domain is valid and it throws an error)
+  INPUT:
+    -d, -domain string      domain to send whois query against (i.e. example.com)
+    -l, -list string        file containing a list of domains to send whois queries to (one domain per line)
+
+  OUTPUT:
+    -o, -output string      file to write results into (JSON format)
+
+  CONFIG:
+    -v, -verbose      print more information
+    -c, -color        use colors on output (recommended)
+    -q, -quiet        don't print banner
+
+  DEBUG:
+    -debug        print raw query output (use this if provided domain is valid and it throws an error)
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
-    gr-whois -d example.com -v
+    gr-whois -d example.com -v -o whois.json
     gr-whois -l domains.txt -c
     cat domains.txt | gr-whois
     `)
@@ -47,6 +55,7 @@ func info(color bool, text string) {
 	}
 }
 
+// nolint: gocyclo
 func printWhois(title string, result *wp.Contact, verbose bool, use_color bool) {
 	if result != nil {
 		if result.Name != "" {
@@ -109,28 +118,43 @@ func printWhois(title string, result *wp.Contact, verbose bool, use_color bool) 
 	}
 }
 
+// nolint: gocyclo
 func main() {
 	var domain string
 	var list string
-	var output string
-	var stdin bool
+	var json_output string
 	var quiet bool
 	var verbose bool
 	var use_color bool
 	var debug bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&domain, "d", "", "domain to send whois query against (i.e. example.com)")
-	flag.StringVar(&list, "l", "", "file containing a list of domains to send whois queries to (one per line)")
-	flag.StringVar(&output, "o", "", "output file to write results into (json format)")
-	flag.BoolVar(&quiet, "q", false, "don't print banner")
-	flag.BoolVar(&verbose, "v", false, "print more information")
-	flag.BoolVar(&use_color, "c", false, "use colors on output (recommended)")
-	flag.BoolVar(&debug, "debug", false, "print raw query output (use this if provided domain is valid and it throws an error)")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&domain, "d", "", "")
+	flag.StringVar(&domain, "domain", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&json_output, "o", "", "")
+	flag.StringVar(&json_output, "output", "", "")
+	flag.BoolVar(&verbose, "v", false, "")
+	flag.BoolVar(&verbose, "verbose", false, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&debug, "debug", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -164,14 +188,6 @@ func main() {
 		helpPanel()
 		core.Red("You can't use (-d) and (-l) at same time", use_color)
 		os.Exit(0)
-	}
-
-	var out_f *os.File
-	if output != "" {
-		out_f, err = os.Create(output)
-		if err != nil {
-			log.Fatal(err)
-		}
 	}
 
 	if domain != "" {
@@ -247,13 +263,18 @@ func main() {
 			printWhois("Technical", result.Technical, verbose, use_color)
 		}
 
-		if output != "" {
+		if json_output != "" {
 			json_body, err := json.Marshal(result)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			_, err = out_f.WriteString(string(json_body))
+			json_out, err := os.Create(json_output)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			_, err = json_out.WriteString(string(json_body))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -301,11 +322,7 @@ func main() {
 				}
 
 			} else {
-				if use_color {
-					fmt.Println("[" + red("!") + "] Invalid domain format found, skipping line\n")
-				} else {
-					fmt.Println("[!] Invalid domain format found, skipping line\n")
-				}
+				core.Red("Invalid domain format found, skipping line\n", use_color)
 				continue
 			}
 
@@ -369,8 +386,8 @@ func main() {
 		}
 	}
 
-	if output != "" {
-		core.Green("Info written to "+output, use_color)
+	if json_output != "" {
+		core.Green("Info written to "+json_output+" (JSON)", use_color)
 	}
 
 	if use_color {

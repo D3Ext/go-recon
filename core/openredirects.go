@@ -6,7 +6,10 @@ import (
 	"strings"
 )
 
-func CheckRedirect(url string, c *http.Client, payloads []string, keyword string) ([]string, error) {
+// this function checks if given url is vulnerable to open redirect with provided payloads
+// if keyword has value, it will be replaced with payloads
+// Example: vuln_urls, err := CheckRedirect("http://example.com/index.php?p=FUZZ", client, []string{"bing.com", "//bing.com"}, "FUZZ")
+func CheckRedirect(url string, client *http.Client, payloads []string, keyword string) ([]string, error) {
 
 	var open_redirects []string
 
@@ -15,7 +18,7 @@ func CheckRedirect(url string, c *http.Client, payloads []string, keyword string
 		return redirect_err
 	}
 
-	c.CheckRedirect = redirect
+	client.CheckRedirect = redirect
 
 	for _, payload := range payloads {
 		new_url := strings.Replace(url, keyword, payload, -1)
@@ -28,7 +31,7 @@ func CheckRedirect(url string, c *http.Client, payloads []string, keyword string
 		req.Header.Add("Connection", "close")
 		req.Close = true
 
-		_, err = c.Do(req)                // Send requests with out custom client config
+		_, err = client.Do(req)           // Send requests with out custom client config
 		if errors.Is(err, redirect_err) { // Check if error is due to redirect
 			open_redirects = append(open_redirects, payload)
 		}
@@ -37,8 +40,14 @@ func CheckRedirect(url string, c *http.Client, payloads []string, keyword string
 	return open_redirects, nil
 }
 
+// returns all defined payloads
 func GetPayloads() []string {
 	return payloads
+}
+
+// return common payloads
+func GetCommonPayloads() []string {
+	return common_payloads
 }
 
 var payloads = []string{
@@ -191,4 +200,12 @@ var payloads = []string{
 	"/%0D/bing.com",
 	"/%0D%0Ahttp://bing.com/",
 	"%20//bing.com",
+}
+
+var common_payloads []string = []string{
+	"",
+	"",
+	"",
+	"",
+	"",
 }

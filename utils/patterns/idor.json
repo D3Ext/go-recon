@@ -1,0 +1,19 @@
+{
+  "description": "filter for parameters potentially vulnerable to IDOR (Insecure Direct Object Reference)",
+  "flags": "-iE",
+  "patterns": [
+    "id=",
+    "user=",
+    "account=",
+    "number=",
+    "order=",
+    "no=",
+    "doc=",
+    "key=",
+    "email=",
+    "group=",
+    "profile=",
+    "edit=",
+    "report="
+  ]
+}

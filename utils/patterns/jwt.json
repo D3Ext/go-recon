@@ -1,0 +1,5 @@
+{
+  "description": "filter for JWTs (JSON Web Tokens)",
+  "flags": "-oE",
+  "pattern": "ey[A-Za-z0-9_-]*\\.[A-Za-z0-9._-]*|ey[A-Za-z0-9_\/+-]*\\.[A-Za-z0-9._\/+-]*"
+}

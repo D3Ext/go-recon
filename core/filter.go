@@ -8,11 +8,10 @@ import (
 	"unicode"
 )
 
-var vuln_params []string = []string{"file", "document", "folder", "root", "path", "pg", "style", "pdf", "template", "php_path", "doc", "page", "name", "cat", "dir", "action", "board", "date", "detail", "download", "prefix", "include", "inc", "locate", "show", "site", "type", "view", "content", "layout", "mod", "conf", "daemon", "upload", "log", "ip", "cli", "cmd", "exec", "command", "execute", "ping", "query", "jump", "code", "reg", "do", "func", "arg", "option", "load", "process", "step", "read", "function", "req", "feature", "exe", "module", "payload", "run", "print", "callback", "checkout", "checkout_url", "continue", "data", "dest", "destination", "domain", "feed", "file_name", "file_url", "folder_url", "forward", "from_url", "go", "goto", "host", "html", "image_url", "img_url", "load_file", "load_url", "login_url", "logout", "navigation", "next", "next_page", "Open", "out", "page_url", "port", "redir", "redirect", "redirect_to", "redirect_uri", "redirect_url", "reference", "return", "return_path", "return_to", "returnTo", "return_url", "rt", "rurl", "target", "to", "uri", "url", "val", "validate", "window", "q", "s", "search", "lang", "keyword", "keywords", "year", "email", "p", "jsonp", "api_key", "api", "password", "emailto", "token", "username", "csrf_token", "unsubscribe_token", "id", "item", "page_id", "month", "immagine", "list_type", "terms", "categoryid", "key", "l", "begindate", "enddate", "select", "report", "role", "update", "user", "sort", "where", "params", "row", "table", "from", "sel", "results", "sleep", "fetch", "order", "column", "field", "delete", "string", "number", "filter", "access", "admin", "dbg", "debug", "edit", "grant", "test", "alter", "clone", "create", "disable", "enable", "make", "modify", "rename", "reset", "shell", "toggle", "adm", "cfg", "open", "img", "filename", "preview", "activity"}
-
+// nolint: misspell
 var text_content []string = []string{"blog", "historias", "personal", "diario", "vida", "historia", "historias", "imagenes", "galeria", "consejos", "viajes", "experiencias", "prensa", "revista", "noticias", "articulos", "informacion", "opiniones", "comentarios", "novedades", "entrevistas", "actualidad", "cronicas", "reportajes", "reseñas", "editorial", "publicaciones", "textos", "escritos", "relatos", "comunicados", "analisis", "columnas", "temas", "contenidos", "lecturas", "blogspot", "sitio", "seccion", "archivo", "blogueros", "autores", "periodismo", "notas", "articulos-de-blog", "entrevistas-destacadas", "stories", "press", "magazine", "news", "articles", "opinions", "images", "comments", "updates", "interviews", "galery", "advices", "story", "stories", "current-affairs", "chronicles", "reports", "reviews", "life", "journal", "travel", "experiencies", "editorial", "publications", "texts", "writings", "tales", "announcements", "analysis", "columns", "topics", "section", "bloggers", "journalism", "notes", "blog-articles", "featured-interviews", "histoires", "presse", "magazine", "actualites", "articles", "information", "opinions", "commentaires", "mises-a-jour", "entretiens", "actualites", "chroniques", "reportages", "critiques", "editorial", "textes", "ecrits", "annonces", "analyse", "colonnes", "contenus", "lectures", "blogueurs", "auteurs", "journalisme", "notes", "articles-de-blog", "interviews-a-la-une"}
 
-var useless_extensions []string = []string{"png", "jpeg", "gif", "jpg", "pjpeg", "pjp", "svg", "jfif", "avif", "webp", "ico", "bmp", "cur", "tif", "tiff", "eot", "ttf", "woff", "woff2", "mp3", "mp4", "avi", "mov", "wmv", "flv", "mkv", "webm", "mpg", "mpeg", "wav", "ogv", "gifv", "mng", "aa", "aac", "act", "aiff", "gsm", "m4a", "movpkg", "mmf", "msv", "wv", "cda", "vox", "ogg", "css", "swf"}
+var useless_extensions []string = []string{"png", "jpeg", "gif", "jpg", "svg", "jfif", "avif", "webp", "ico", "tif", "tiff", "ttf", "mp3", "mp4", "avi", "mov", "wmv", "flv", "mkv", "webm", "mpg", "mpeg", "wav", "ogv", "css", "swf"}
 
 var blacklist []string
 
@@ -22,11 +21,13 @@ var seen_patterns []string
 
 var seen_params []string
 
-func FilterUrls(urls []string, filters []string) []string {
-
+// remove useless urls, duplicates and more
+// to optimize results as much as possible from
+// a list of urls
+// Example: new_urls := gorecon.FilterUrls(urls, []string{"hasparams"})
+func FilterUrls(urls []string, filters []string) []string { // nolint: gocyclo
 	var urls_to_return []string
 
-	var vuln bool
 	var hasparams bool
 	var noparams bool
 	var hasextension bool
@@ -34,9 +35,7 @@ func FilterUrls(urls []string, filters []string) []string {
 	var nocontent bool
 
 	for _, f := range filters { // check provided filters
-		if f == "vuln" {
-			vuln = true
-		} else if (f == "hasparams") || (f == "hasparam") {
+		if (f == "hasparams") || (f == "hasparam") {
 			hasparams = true
 		} else if (f == "noparams") || (f == "noparam") {
 			noparams = true
@@ -124,37 +123,17 @@ func FilterUrls(urls []string, filters []string) []string {
 			}
 		}
 
-		// now start processing url params and applying "vuln" filter if is especified
+		// now start processing url params
 		key := u.Host + u.Path
 		var more_params bool
 
-		if (len(u.RawQuery) == 0) && (vuln) { // continue to next iteration since "vuln" filter needs parameters
-			continue
-
-		} else if len(u.RawQuery) > 0 { // enter here if url has parameters
+		if len(u.RawQuery) > 0 { // enter here if url has parameters
 			// get query parameters
 			queryParams := make([]string, len(u.Query()))
 
 			i := 0
-			vuln_found := 0
 			for k := range u.Query() { // iterate over parameter names (i.e. page, id, query)
-				// check vuln filter
-				if vuln { // perform logic if filter is especified
-					for _, v := range vuln_params {
-						if v == k { // potential vuln param
-							queryParams[i] = k
-							vuln_found = 1
-							break
-						}
-					}
-
-					if vuln_found == 1 {
-						break
-					}
-
-				} else {
-					queryParams[i] = k
-				}
+				queryParams[i] = k
 
 				i++
 			}
@@ -164,13 +143,7 @@ func FilterUrls(urls []string, filters []string) []string {
 				continue
 			}
 
-			if (vuln) && (vuln_found == 1) { // check if vuln parameter was found
-				more_params = true // set variable to true so current urls isn't excluded later
-				for _, p := range queryParams {
-					seen_params = append(seen_params, p)
-				}
-
-			} else if !checkParams(queryParams) { // if iteration query parameters have been already seen, jump to next one
+			if !checkParams(queryParams) { // if iteration query parameters have been already seen, jump to next one
 				more_params = true
 				for _, p := range queryParams {
 					seen_params = append(seen_params, p)

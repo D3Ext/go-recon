@@ -5,39 +5,71 @@ Here is a list of the accessible function through the official API and some exam
 ## Subdomains
 
 ```go
-// results := make(chan string)
-// go gorecon.GetAllSubdomains("example.com", results, 10000)
-func GetAllSubdomains(domain string, subdomains chan string, timeout int) {
-  core.GetAllSubdomains(domain, subdomains, timeout)
+// this function sents through provided channel all the gathered subdomains
+// providers slice is used to configure the providers to use
+// it also receives a client so you can custom most of the process
+// Example: err := GetSubdomains("example.com", results, []string{"alienvault", "crt", "rapiddns", "wayback"}, gorecon.DefaultClient())
+func GetSubdomains(domain string, results chan string, providers []string, client *http.Client) error {
+	return core.GetSubdomains(domain, results, providers, client)
 }
 
-// subdomains, err := gorecon.Crt("example.com", 8000)
-func Crt(domain string, timeout int) ([]string, error) {
-  return core.Crt(domain, timeout)
+/*
+
+providers functions
+
+*/
+
+func AlienVault(domain string, results chan string, client *http.Client) error {
+  return p.AlienVault(domain, results, client)
 }
 
-// subdomains, err := gorecon.HackerTarget("example.com", 8000)
-func HackerTarget(domain string, timeout int) ([]string, error) {
-  return core.HackerTarget(domain, timeout)
+func Anubis(domain string, results chan string, client *http.Client) error {
+  return p.Anubis(domain, results, client)
 }
 
-// subdomains, err := gorecon.AlienVault("example.com", 8000)
-func AlienVault(domain string, timeout int) ([]string, error) {
-  return core.AlienVault(domain, timeout)
+func CommonCrawl(domain string, results chan string, client *http.Client) error {
+  return p.CommonCrawl(domain, results, client)
+}
+
+func Crt(domain string, results chan string, client *http.Client) error {
+  return p.Crt(domain, results, client)
+}
+
+func Digitorus(domain string, results chan string, client *http.Client) error {
+  return p.Digitorus(domain, results, client)
+}
+
+func HackerTarget(domain string, results chan string, client *http.Client) error {
+  return p.HackerTarget(domain, results, client)
+}
+
+func RapidDns(domain string, results chan string, client *http.Client) error {
+  return p.RapidDns(domain, results, client)
+}
+
+func Wayback(domain string, results chan string, client *http.Client) error {
+  return p.Wayback(domain, results, client)
 }
 ```
 
 ## Secrets
 
 ```go
-func FindSecrets(url string, timeout int) ([]string, error) {
-  return core.FindSecrets(url, timeout)
+// this function receives a url and a client to look for
+// potential leaked secrets like API keys (using regex)
+// Example: secrets, err := gorecon.FindSecrets("http://github.com", gorecon.DefaultClient())
+func FindSecrets(url string, client *http.Client) ([]string, error) {
+	return core.FindSecrets(url, client)
 }
 ```
 
 ## Filter
 
 ```go
+// remove useless urls, duplicates and more
+// to optimize results as much as possible from 
+// a list of urls
+// Example: new_urls := gorecon.FilterUrls(urls, []string{"hasparams"})
 func FilterUrls(urls []string, filters []string) []string {
   return core.FilterUrls(urls, filters)
 }
@@ -46,6 +78,8 @@ func FilterUrls(urls []string, filters []string) []string {
 ## Tech
 
 ```go
+// this function send a request to given url and returns running technologies
+// Example: techs, err := GetTech("http://github.com", gorecon.DefaultClient())
 func GetTech(url string, timeout int) (map[string]struct{}, error) {
   return core.GetTech(url, timeout)
 }
@@ -54,6 +88,10 @@ func GetTech(url string, timeout int) (map[string]struct{}, error) {
 ## 403
 
 ```go
+// try different ways to bypass 403 status code urls
+// returns slice of urls with payloads on them,
+// a slice with their respective status codes, and
+// finally an error
 func Check403(url, word string, timeout int) ([]string, []int, error) {
   return core.Check403(url, word, timeout)
 }
@@ -62,8 +100,27 @@ func Check403(url, word string, timeout int) ([]string, []int, error) {
 ## WAF
 
 ```go
+// this function send a request to url with an LFI payload
+// to try to trigger the possible WAF (Web Application Firewall) i.e. Cloudflare
+// Example: waf, err := gorecon.DetectWaf(url, "", "", gorecon.DefaultHttpClient())
 func DetectWaf(url string, payload string, keyword string, timeout int) (string, error) {
   return core.DetectWaf(url, payload, keyword, timeout)
+}
+```
+
+## AWS
+
+```go
+// this function returns all defined permutations for
+// S3 buckets name generation
+func GetAllPerms() []string {
+	return core.GetAllPerms()
+}
+
+// this function returns more or less permutations based on given level
+// 1 returns less permutations than 6 (1 lower, 5 higher)
+func GetPerms(level int) []string {
+	return core.GetPerms(level)
 }
 ```
 
@@ -83,6 +140,9 @@ type DnsInfo struct {
 
 */
 
+// main function for DNS information gathering
+// it receives a domain and tries to find most important info
+// and returns a DnsInfo struct and an error
 func Dns(domain string) (core.DnsInfo, error) {
   return core.Dns(domain)
 }
@@ -91,6 +151,8 @@ func Dns(domain string) (core.DnsInfo, error) {
 ## Whois
 
 ```go
+// send WHOIS query to given domain to retrieve public info
+// Example: info, err := gorecon.Whois("hackthebox.com")
 func Whois(domain string) (wp.WhoisInfo, error) {
   return core.Whois(domain)
 }
@@ -147,50 +209,69 @@ type Contact struct {
 ## Urls
 
 ```go
-// results := make(chan string)
-// go gorecon.GetAllUrls("example.com", results, 5000, true)
-func GetAllUrls(domain string, results chan string, timeout int, recursive bool) {
-  core.GetAllUrls(domain, results, timeout, recursive)
+// main function to enumerate urls about provided domain, urls are sent through channel
+// set "recursive" to false if you don't want to get urls related to subdomains
+func GetAllUrls(domain string, results chan string, client *http.Client, recursive bool) error {
+  return core.GetAllUrls(domain, results, client, recursive)
 }
 
-// results := make(chan string)
-// go gorecon.GetAllUrls("example.com", results, 5000, true)
-func GetWaybackUrls(domain string, results chan string, timeout int, recursive bool) error {
-  return core.GetWaybackUrls(domain, results, timeout, recursive)
+/*
+
+providers functions
+
+*/
+
+func WaybackUrls(domain string, results chan string, client *http.Client, workers int, recursive bool) error {
+	return providers.WaybackUrls(domain, results, client, workers, recursive)
 }
 
-func GetOTXUrls(domain string, timeout int, recursive bool) ([]string, error) {
-  return core.GetOTXUrls(domain, timeout, recursive)
+func AlienVaultUrls(domain string, results chan string, client *http.Client, recursive bool) (error) {
+	return providers.AlienVaultUrls(domain, results, client, recursive)
 }
 
-func GetUrlScanUrls(domain string, timeout int, apikey string) ([]string, error) {
-  return core.GetUrlScanUrls(domain, timeout, apikey)
+func UrlScanUrls(domain string, results chan string, client *http.Client, recursive bool, apikey string) (error) {
+	return providers.UrlScanUrls(domain, results, client, recursive, apikey)
 }
 ```
 
 ## Open Redirects
 
 ```go
+// this function checks if given url is vulnerable to open redirect with provided payloads
+// if keyword has value, it will be replaced with payloads
+// Example: vuln_urls, err := CheckRedirect("http://example.com/index.php?p=FUZZ", client, []string{"bing.com", "//bing.com"}, "FUZZ")
 func CheckRedirect(url string, c *http.Client, payloads []string, keyword string) ([]string, error) {
-  return core.CheckRedirect(url, c, payloads, keyword)
+	return core.CheckRedirect(url, c, payloads, keyword)
 }
 
+// return all defined payloads
 func GetPayloads() []string {
-  return core.GetPayloads()
+	return core.GetPayloads()
+}
+
+// return common payloads
+func GetCommonPayloads() []string {
+  return core.GetCommonPayloads()
 }
 ```
 
 ## JS
 
 ```go
-func GetEndpoints(urls []string, results chan string, workers int, timeout int) {
-  core.GetEndpoints(urls, results, workers, timeout)
+// main function to extract JS endpoints from a list of urls
+// it receives a custom client for further customization
+// Example: go gorecon.GetEndpointsFromFile(urls, results, 15, gorecon.DefaultClient())
+func GetEndpoints(urls []string, results chan string, workers int, client *http.Client) error {
+	return core.GetEndpoints(urls, results, workers, client)
 }
 
-func FetchEndpoints(urls <-chan string, results chan string, user_agent string, timeout int) {
-  core.FetchEndpoints(urls, results, user_agent, timeout)
+// this function receives urls from channel so 
+// it's better for concurrency and configuration
+func FetchEndpoints(urls <-chan string, results chan string, client *http.Client) error {
+	return core.FetchEndpoints(urls, results, client)
 }
 ```
+
 
 
 

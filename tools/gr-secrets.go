@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"sync"
 
 	"github.com/D3Ext/go-recon/core"
@@ -31,57 +33,97 @@ type SecretsInfo struct {
 
 func helpPanel() {
 	fmt.Println(`Usage of gr-secrets:
-    -u)       url to search for secrets in (i.e. https://example.com/script.js)
-    -l)       file containing a list of JS endpoints to search for secrets (one url per line)
-    -r)       custom regex to search for (i.e. apikey=secret[a-z]+)
-    -lr)      file containing a list of custom regex to search for (one regex per line)
-    -w)       number of concurrent workers (default=15)
-    -o)       file to write secrets into
-    -oj)      file to write secrets into (JSON format)
-    -a)       user agent to include on requests (default=none)
-    -c)       print colors on output
-    -t)       milliseconds to wait before each request timeout (default=5000)
-    -q)       don't print banner, only output
-    -h)       print help panel
+  INPUT:
+    -u, -url string       url in which to look for secrets (i.e. https://example.com/script.js)
+    -l, -list string      file containing a list of JS endpoints to search for secrets (one url per line)
+
+  REGEX:
+    -r, -regex string           custom regex to search for (i.e. apikey=secret[a-z]+)
+    -rl, -regex-list string     file containing a list of custom regex to search for (one regex per line)
+
+  OUTPUT:
+    -o, -output string            file to write secrets into
+    -oj, -output-json string      file to write secrets into (JSON format)
+    -oc, -output-csv string       file to write secrets into (CSV format)
+
+  CONFIG:
+    -w, -workers int      number of concurrent workers (default=10)
+    -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
+    -a, -agent string     user agent to include on requests (default=none)
+    -t, -timeout int      milliseconds to wait before each request timeout (default=5000)
+    -c, -color            print colors on output
+    -q, -quiet            print neither banner nor logging, only print output
+
+  DEBUG:
+    -version      show go-recon version
+    -h, -help     print help panel
 
 Examples:
     gr-secrets -u https://example.com -o secrets.txt -c
-    gr-secrets -l js.txt -w 10 -t 6000
-    gr-secrets -u https://example.com -lr regex.txt
+    gr-secrets -l urls.txt -w 15 -t 6000
+    gr-secrets -u https://example.com -rl regexs.txt
     cat js.txt | gr-secrets -r "secret=api_[A-Z]+"
     `)
 }
 
+var csv_info [][]string
+
+// nolint: gocyclo
 func main() {
 	var url string
 	var list string
 	var regex string
 	var regex_list string
 	var workers int
+	var proxy string
 	var output string
 	var json_output string
-	var stdin bool
+	var csv_output string
 	var user_agent string
 	var timeout int
 	var quiet bool
 	var use_color bool
+	var version bool
 	var help bool
+	var stdin bool
 
-	flag.StringVar(&url, "u", "", "url to search for secrets in (i.e. https://example.com/script.js)")
-	flag.StringVar(&list, "l", "", "file containing a list of JS endpoints to search for secrets (one url per line)")
-	flag.StringVar(&regex, "r", "", "custom regex to search for (i.e. apikey=secret[a-z]+)")
-	flag.StringVar(&regex_list, "lr", "", "file containing a list of custom regex to search for (one regex per line)")
-	flag.IntVar(&workers, "w", 15, "number of concurrent workers")
-	flag.StringVar(&output, "o", "", "file to write secrets into")
-	flag.StringVar(&json_output, "oj", "", "file to write secrets into (JSON format)")
-	flag.StringVar(&user_agent, "a", "", "user agent to include on requests")
-	flag.IntVar(&timeout, "t", 5000, "milliseconds to wait before each request timeout")
-	flag.BoolVar(&quiet, "q", false, "don't print banner, only output")
-	flag.BoolVar(&use_color, "c", false, "print colors on output")
-	flag.BoolVar(&help, "h", false, "print help panel")
+	flag.StringVar(&url, "u", "", "")
+	flag.StringVar(&url, "url", "", "")
+	flag.StringVar(&list, "l", "", "")
+	flag.StringVar(&list, "list", "", "")
+	flag.StringVar(&regex, "r", "", "")
+	flag.StringVar(&regex, "regex", "", "")
+	flag.StringVar(&regex_list, "rl", "", "")
+	flag.StringVar(&regex_list, "regex-list", "", "")
+	flag.IntVar(&workers, "w", 10, "")
+	flag.IntVar(&workers, "workers", 10, "")
+	flag.StringVar(&proxy, "p", "", "")
+	flag.StringVar(&proxy, "proxy", "", "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "output-json", "", "")
+	flag.StringVar(&csv_output, "oc", "", "")
+	flag.StringVar(&csv_output, "output-csv", "", "")
+	flag.StringVar(&user_agent, "a", "", "")
+	flag.StringVar(&user_agent, "agent", "", "")
+	flag.IntVar(&timeout, "t", 5000, "")
+	flag.IntVar(&timeout, "timeout", 5000, "")
+	flag.BoolVar(&quiet, "q", false, "")
+	flag.BoolVar(&quiet, "quiet", false, "")
+	flag.BoolVar(&use_color, "c", false, "")
+	flag.BoolVar(&use_color, "color", false, "")
+	flag.BoolVar(&version, "version", false, "")
+	flag.BoolVar(&help, "h", false, "")
+	flag.BoolVar(&help, "help", false, "")
 	flag.Parse()
 
 	t1 := core.StartTimer()
+
+	if version {
+		fmt.Println("go-recon version:", core.Version())
+		os.Exit(0)
+	}
 
 	if !quiet {
 		fmt.Println(core.Banner())
@@ -109,6 +151,11 @@ func main() {
 	if (url == "") && (list == "") && (!stdin) { // check if required arguments were given
 		helpPanel()
 		os.Exit(0)
+	}
+
+	if proxy != "" {
+		os.Setenv("HTTP_PROXY", proxy)
+		os.Setenv("HTTPS_PROXY", proxy)
 	}
 
 	// define variables which will be used to write secrets to file
@@ -156,6 +203,11 @@ func main() {
 	if url != "" {
 
 		if !quiet {
+			core.Warning("Use with caution.", use_color)
+			core.Magenta("Concurrent workers: "+strconv.Itoa(workers), use_color)
+			if proxy != "" {
+				core.Magenta("Proxy: "+proxy, use_color)
+			}
 			core.Magenta("Looking for secrets...", use_color)
 		}
 
@@ -177,7 +229,7 @@ func main() {
 
 		if regex != "" { // enter here if custom regex was provided
 			if !quiet {
-				core.Magenta("Using custom regex to filter for secrets: "+regex, use_color)
+				core.Magenta("Using custom regex to filter for secrets: "+regex+"\n", use_color)
 			}
 
 			match, err := regexp.MatchString(regex, string(body))
@@ -189,6 +241,7 @@ func main() {
 				found_pattern := regexp.MustCompile(regex)
 				str_match := found_pattern.FindString(string(body))
 				found_secrets = append(found_secrets, str_match)
+				csv_info = append(csv_info, []string{url, str_match})
 				counter += 1
 
 				writeOutput(str_match, output, out_f)
@@ -198,7 +251,7 @@ func main() {
 
 		} else if regex_list != "" {
 			if !quiet {
-				core.Magenta("Using custom list of regexp...", use_color)
+				core.Magenta("Using custom list of regexp...\n", use_color)
 			}
 
 			f, err := os.Open(regex_list)
@@ -220,6 +273,7 @@ func main() {
 					found_pattern := regexp.MustCompile(r)
 					str_match := found_pattern.FindString(string(body))
 					found_secrets = append(found_secrets, str_match)
+					csv_info = append(csv_info, []string{url, str_match})
 					counter += 1
 
 					writeOutput(str_match, output, out_f)
@@ -230,7 +284,7 @@ func main() {
 
 		} else { // enter here if no custom regex was provided
 			if !quiet {
-				core.Magenta("Using default regex...", use_color)
+				core.Magenta("Using default regex...\n", use_color)
 			}
 
 			for _, secret := range secrets_list {
@@ -243,6 +297,7 @@ func main() {
 					found_pattern := regexp.MustCompile(secret)
 					str_match := found_pattern.FindString(string(body))
 					found_secrets = append(found_secrets, str_match)
+					csv_info = append(csv_info, []string{url, str_match})
 					counter += 1
 
 					writeOutput(str_match, output, out_f)
@@ -306,6 +361,7 @@ func main() {
 							found_pattern := regexp.MustCompile(regex)
 							str_match := found_pattern.FindString(string(body))
 							found_secrets = append(found_secrets, str_match)
+							csv_info = append(csv_info, []string{js_endpoint, str_match})
 							counter += 1
 
 							writeOutput(str_match, output, out_f)
@@ -333,6 +389,7 @@ func main() {
 								found_pattern := regexp.MustCompile(r)
 								str_match := found_pattern.FindString(string(body))
 								found_secrets = append(found_secrets, str_match)
+								csv_info = append(csv_info, []string{js_endpoint, str_match})
 								counter += 1
 
 								writeOutput(str_match, output, out_f)
@@ -352,6 +409,7 @@ func main() {
 								found_pattern := regexp.MustCompile(secret)
 								str_match := found_pattern.FindString(string(body))
 								found_secrets = append(found_secrets, str_match)
+								csv_info = append(csv_info, []string{js_endpoint, str_match})
 								counter += 1
 
 								writeOutput(str_match, output, out_f)
@@ -377,7 +435,6 @@ func main() {
 
 		close(urls_c)
 		wg.Wait()
-
 	}
 
 	if json_output != "" {
@@ -398,31 +455,54 @@ func main() {
 		}
 	}
 
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"urls", "secrets"}
+		writer.Write(headers)
+
+		for _, row := range csv_info {
+			writer.Write(row)
+		}
+	}
+
 	if !quiet {
-		if counter > 1 {
+		if counter >= 1 {
 			fmt.Println()
+
 			if output != "" {
-				core.Green("Secrets written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Secrets written to "+json_output, use_color)
+				core.Green("Secrets written to "+output+" (TXT)", use_color)
 			}
 
-			if use_color {
-				fmt.Println("["+green("+")+"]", cyan(counter), "secrets found")
-				fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			} else {
-				fmt.Println("[+]", counter, "secrets found")
-				fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
+			if json_output != "" {
+				core.Green("Secrets written to "+json_output+" (JSON)", use_color)
+			}
+
+			if csv_output != "" {
+				core.Green("Secrets written to "+csv_output+" (CSV)", use_color)
 			}
 
 		} else {
 			fmt.Println()
 			core.Red("No secrets found", use_color)
-			if use_color {
-				fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
-			} else {
-				fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
-			}
+		}
+
+		if use_color {
+			fmt.Println("["+green("+")+"]", cyan(counter), "secrets found")
+		} else {
+			fmt.Println("[+]", counter, "secrets found")
+		}
+
+		if use_color {
+			fmt.Println("["+green("+")+"] Elapsed time:", green(core.TimerDiff(t1)))
+		} else {
+			fmt.Println("[+] Elapsed time:", core.TimerDiff(t1))
 		}
 	}
 }

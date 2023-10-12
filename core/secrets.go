@@ -6,11 +6,11 @@ import (
 	"regexp"
 )
 
-func FindSecrets(url string, timeout int) ([]string, error) {
-
+// this function receives a url and a client to look for
+// potential leaked secrets like API keys (using regex)
+func FindSecrets(url string, client *http.Client) ([]string, error) {
 	var found_secrets []string
 
-	client := CreateHttpClient(timeout)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("Connection", "close")
 	req.Close = true
