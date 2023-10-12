@@ -49,13 +49,13 @@ See [Wiki](https://github.com/D3Ext/go-recon/wiki) for further info
 
 - ***gr-subdomains***: Enumerate subdomains of a domain using 8 different providers (passively)
 - ***gr-urls***: Find URLs (endpoints) of a domain from different sources (Wayback, AlienVault)
-- ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, custom concurrency and other functions
+- ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, custom concurrency and more
 - ***gr-403***: Try to bypass pages that return 403 status code (multiple techniques)
 - ***gr-openredirects***: Fuzz for potential open redirects on given URLs using a payload/list of payloads
 - ***gr-dns***: Retrieve DNS info from domains
-- ***gr-aws***: Enumerate S3 buckets for given domain using permutations, verify bucket lists, and more via other parameters
+- ***gr-aws***: Enumerate S3 buckets for given domain using permutations, verify bucket lists and much more
 - ***gr-waf***: Identify which WAF is running on a domain
-- ***gr-filter***: Remove duplicated and useless URLs from list, apply filters, create custom filter patterns, and filter output in a smart way
+- ***gr-filter***: Remove useless URLs from list, apply filters, create custom filter patterns
 - ***gr-replace***: Replace given keyword or parameter value with provided value from URLs of a list
 - ***gr-secrets***: Search for API keys and leaked secrets in HTML and JS pages
 - ***gr-crawl***: Fastly crawl urls for gathering URLs and JS endpoints, with custom depth and other options

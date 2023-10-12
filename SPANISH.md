@@ -50,9 +50,9 @@ Mira la [Wiki](https://github.com/D3Ext/go-recon/wiki) para mas info
 - ***gr-403***: Intenta "bypassear" paginas que devuelven codigo de estado 403 (forbidden)
 - ***gr-openredirects***: Fuzzea por posibles open redirects en las URLs proporcionadas
 - ***gr-dns***: Consigue información DNS de dominios
-- ***gr-aws***: Enumera buckets S3 para un dominio/s mediante permutaciones, comprueba listas de buckets y mas mediante otros parametros
+- ***gr-aws***: Enumera buckets S3 para un dominio/s mediante permutaciones, comprueba listas de buckets y mucho mas
 - ***gr-waf***: Identifica si es posible el WAF que esta corriendo en una URL
-- ***gr-filter***: Elimina URLs duplicadas e inutiles de una lista, aplica filtros, crea patrones personalizados y filtra output de forma inteligente
+- ***gr-filter***: Elimina URLs duplicadas e inutiles de una lista, aplica filtros, crea patrones personalizados y filtra output
 - ***gr-replace***: Reemplaza palabras clave o el valor de un parametro por el valor proporcionado, en una lista de urls
 - ***gr-secrets***: Busca API keys y secretos en paginas HTML y JS
 - ***gr-crawl***: Realiza crawling de forma rápida para enumerar URLs y endpoints JS, con profundidad personalizada y otras opciones

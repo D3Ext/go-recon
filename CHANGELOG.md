@@ -1,3 +1,4 @@
+- big changes, tools reworked, custom filters, better documentation and changes, changelog added, comparisions added
 - fix
 - changes and S3 buckets finding tool finally working
 - Merge pull request #2 from D3Ext/dependabot/go_modules/github.com/antchfx/xmlquery-1.3.1
