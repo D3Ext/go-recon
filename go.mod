@@ -11,7 +11,7 @@ require (
 	github.com/fatih/color v1.15.0
 	github.com/gocolly/colly/v2 v2.1.0
 	github.com/jpillora/go-tld v1.2.1
-	github.com/likexian/whois v1.15.0
+	github.com/likexian/whois v1.15.1
 	github.com/likexian/whois-parser v1.24.9
 	github.com/projectdiscovery/wappalyzergo v0.0.108
 )
