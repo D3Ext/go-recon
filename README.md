@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/banner.png" alt="Gopher"/>
+  <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/transparent-banner.png" alt="Gopher"/>
   <h1 align="center">go-recon</h1>
   <h4 align="center">External recon toolkit</h4>
   <h6 align="center">Coded with 💙 by D3Ext</h6>
