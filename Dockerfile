@@ -1,4 +1,6 @@
-FROM golang:1.19
+FROM golang:1.20.6-alpine
+
+LABEL maintainer="D3Ext"
 
 # set work directory
 WORKDIR /app
@@ -16,4 +18,5 @@ WORKDIR /app/go-recon
 RUN make
 RUN make install
 
+WORKDIR /app/go-recon/build
 

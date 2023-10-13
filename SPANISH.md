@@ -1,7 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/banner.png" width="130" heigth="60" alt="Gopher"/>
+  <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/banner.png" alt="Gopher"/>
   <h1 align="center">go-recon</h1>
-  <h4 align="center">Bug Bounty and external recon toolkit</h4>
+  <h4 align="center">External recon toolkit</h4>
   <h6 align="center">Hecho con 💙 por D3Ext</h6>
 
 </p>
