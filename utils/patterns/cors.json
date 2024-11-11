@@ -1,0 +1,5 @@
+{
+  "description": "look for the Access-Control-Allow string which could indicate a CORS vulnerability",
+  "flags": "-HnriE",
+  "pattern": "Access-Control-Allow"
+}

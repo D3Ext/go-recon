@@ -2,7 +2,6 @@
   <img src="https://raw.githubusercontent.com/D3Ext/go-recon/main/static/transparent-banner.png" alt="Gopher"/>
   <h1 align="center">go-recon</h1>
   <h4 align="center">External recon toolkit</h4>
-  <h6 align="center">Coded with 💙 by D3Ext</h6>
 </p>
 
 <p align="center">
@@ -29,57 +28,55 @@
   <a href="#introduction">Introduction</a> •
   <a href="#tools">Tools</a> •
   <a href="#installation">Installation</a> •
-  <a href="#usage">Usage</a> •
-  <a href="#contributing">Contributing</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/D3Ext/go-recon/blob/main/SPANISH.md">README in Spanish</a>
+  <a href="#usage">Usage</a>
 </p>
 
 # Introduction
 
-This project started as various Golang scripts to automatically perform tedious processes and to perform external recon, between another bunch of things. Over time I polished the tools and finally decided to take it seriously, in this way I would also learn to use Golang channels and concurrency, so tools are fast and configurable.
+This project started as various Golang scripts to automatically perform tedious processes while performing external recon, between another bunch of things. Over the time I polished the scripts and finally decided to create much more versatile tools, in this way I would also learn to use Golang channels and concurrency.
 
-This toolkit provides tools for different purposes while performing external recon. Most functions are also available and can be used through the official package API for your own tools. Feel free to contribute by reporting issues or discussing ideas.
+This toolkit provides tools for different purposes (enum and exploitation) while performing external recon. Most functions are also available and can be used through the official package API for your own tools. Feel free to contribute by reporting issues or discussing ideas.
 
-See [Wiki](https://github.com/D3Ext/go-recon/wiki) for further info
+# General Features
+
+This are some of the most notable features of this suite:
+
+- Speed and concurrency
+- Easy and malleable usage via CLI arguments
+- Tools are designed to be combined between them
+- Designed for Bug Bounty and external recon
+- Multiple output formats (STDOUT, TXT, JSON, CSV)
+- Take input as CLI arguments or directly from STDIN
+- Direct access to official package API
+- Coded in Golang to provide the best performance
 
 # Tools
 
+Every tool starts with "gr" as acronym of ***GoRecon*** in order to distinct their names from other tools
+
 - ***gr-subdomains***: Enumerate subdomains of a domain using 8 different providers (passively)
 - ***gr-urls***: Find URLs (endpoints) of a domain from different sources (Wayback, AlienVault)
-- ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, custom concurrency and more
+- ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, with custom concurrency and more
 - ***gr-403***: Try to bypass pages that return 403 status code (multiple techniques)
 - ***gr-openredirects***: Fuzz for potential open redirects on given URLs using a payload/list of payloads
-- ***gr-dns***: Retrieve DNS info from domains
 - ***gr-aws***: Enumerate S3 buckets for given domain using permutations, verify bucket lists and much more
-- ***gr-waf***: Identify which WAF is running on a domain
-- ***gr-filter***: Remove useless URLs from list, apply filters, create custom filter patterns
+- ***gr-waf***: Identify which WAF is running on target using multiple payloads
+- ***gr-filter***: Remove useless URLs from list using inteligent filtering, create custom filter patterns
 - ***gr-replace***: Replace given keyword or parameter value with provided value from URLs of a list
 - ***gr-secrets***: Search for API keys and leaked secrets in HTML and JS pages
-- ***gr-crawl***: Fastly crawl urls for gathering URLs and JS endpoints, with custom depth and other options
+- ***gr-crawl***: Fastly crawl urls for gathering URLs and JS endpoints, with custom depth and other config options
+- ***gr-dns***: Retrieve DNS info from domains
 - ***gr-whois***: Perform WHOIS query against domains
-
-# Features
-
-- Speed and concurrency
-- Easy usage and configurable via CLI arguments
-- Tools can be combined between them
-- Multiple output formats (STDOUT, TXT, JSON, CSV)
-- Input as URL, domains or STDIN
-- Direct access to official package API
-- Tested on Linux
 
 # Installation
 
 Compile and install from source code via Github:
 
 ```sh
-git clone https://github.com/D3Ext/go-recon
-cd go-recon
-make
-sudo make install
+$ git clone https://github.com/D3Ext/go-recon
+$ cd go-recon
+$ make
+$ sudo make install
 ```
 
 The binaries will be compiled and installed on PATH, so you just will have to execute it from CLI
@@ -90,17 +87,17 @@ $ gr-subdomains
 
 ## Extra
 
-To install a set of custom filters/patterns and a Bash autocompletion script, you could execute the following command:
+To install a set of custom filters/patterns, you should execute the following command:
 
 ```sh
-make extra
+$ make extra
 ```
 
-Then if you press TAB twice when using gr-subdomains or gr-filter, you will see the available providers and filters.
+Then you can use them with `gr-filter`
 
 # Usage
 
-All tools have similar usage and CLI parameters
+All tools have similar usage and CLI parameters to make recon easier
 
 > Example help panel
 ```
@@ -109,7 +106,7 @@ All tools have similar usage and CLI parameters
 | (_| | (_) |_____| | |  __/ (_| (_) | | | |
  \__, |\___/      |_|  \___|\___\___/|_| |_|
   __/ |     by D3Ext
- |___/      v0.1
+ |___/      v0.2
 
 Usage of gr-subdomains:
   INPUT:
@@ -117,8 +114,9 @@ Usage of gr-subdomains:
     -l, -list string        file containing a list of domains to find their subdomains (one domain per line)
 
   OUTPUT:
-    -o, -output string          file to write subdomains into
+    -o, -output string          file to write subdomains into (TXT format)
     -oj, -output-json string    file to write subdomains into (JSON format)
+    -oc, -output-csv string     file to write subdomains into (CSV format)
 
   PROVIDERS:
     -all                      use all available providers to discover subdomains (slower than default)
@@ -138,7 +136,7 @@ Usage of gr-subdomains:
 Examples:
     gr-subdomains -d example.com -o subdomains.txt -c
     gr-subdomains -l domains.txt -p crt,hackertarget -t 8000
-    cat domain.txt | gr-subdomains -all
+    cat domain.txt | gr-subdomains -all -q
     cat domain.txt | gr-subdomains -p anubis -oj subdomains.json -c
 ```
 
@@ -165,21 +163,22 @@ See [here](https://github.com/D3Ext/go-recon/blob/main/USAGE.md) for ideas and r
 Install official ***go-recon*** Golang package like this:
 
 ```sh
-go get github.com/D3Ext/go-recon/pkg/go-recon
+$ go get github.com/D3Ext/go-recon/pkg/go-recon
 ```
 
 If you want to use ***go-recon*** in your own Golang code see [here](https://github.com/D3Ext/go-recon/tree/main/examples)
 
 # TODO
 
-- ~~Parameter to control used providers~~
-- ~~CSV output~~
 - More tools and features
-- ~~Dockerfile~~
-- ~~Changelog~~
-- HTML results reports
 - More optimization
-- ~~Compare results with other tools such as **subfinder**, **gau**, **httprobe**...~~
+- Email accounts enumeration
+- ~~~Little fixes~~~
+- ~~~CSV output supported by default on every tool~~~
+- ~~~CLI parameter to configure custom user agents~~~
+- ~~~More filtering patterns~~~
+- ~~~More vulnerabilities payloads~~~
+- ~~~WAF detection improved~~~
 
 # References
 
@@ -212,22 +211,11 @@ https://github.com/edoardottt/favirecon
 https://github.com/hueristiq/xs3scann3r
 ```
 
-# Contributing
-
-See [CONTRIBUTING.md](https://github.com/D3Ext/go-recon/blob/main/CONTRIBUTING.md)
-
-# Changelog
-
-See [CHANGELOG.md](https://github.com/D3Ext/go-recon/blob/main/CHANGELOG.md)
-
 # License
 
 This project is under MIT license
 
-Copyright © 2023, *D3Ext*
+Copyright © 2024, *D3Ext*
 
-# Support
-
-<a href="https://www.buymeacoffee.com/D3Ext" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 

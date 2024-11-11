@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+  "encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -47,15 +48,16 @@ func helpPanel() {
     -bl, -bucket-list string    file containing a list of bucket names to check and list info (one name per line)
 
   PERMUTATIONS:
-    -pl, -perms-list string       file containing a list of permutations, if not especified, default perms are used (doesn't apply with -b)
     -level int                    level of permutations to generate with (-d) and (-l) params (1-5, default=3)
+    -pl, -perms-list string       file containing a list of permutations, if not especified, default perms are used (doesn't apply with -b)
     -f, -format string            pattern to generate bucket names based on permutations (default: <perm>.<domain>.<tld>)
-    -all-formats                  use 4 most common formats to generate bucket names (slow)
+    -af, -all-formats             use 4 most common formats to generate bucket names (slow)
     -lf, -list-formats            show allowed variables that will be replaced by corresponding values
 
   OUTPUT:
-    -o, -output string          file to write buckets urls into
+    -o, -output string          file to write buckets urls into (TXT format)
     -oj, -output-json string    file to write buckets urls into (JSON format)
+    -oc, -output-csv string     file to write buckets urls into (CSV format)
 
   CONFIG:
     -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
@@ -92,6 +94,7 @@ func main() {
 	var workers int
 	var output string
 	var json_output string
+  var csv_output string
 	var quiet bool
 	var use_color bool
 	var version bool
@@ -104,11 +107,12 @@ func main() {
 	flag.StringVar(&list, "list", "", "")
 	flag.StringVar(&buckets_list, "bl", "", "")
 	flag.StringVar(&buckets_list, "buckets-list", "", "")
+	flag.IntVar(&level, "level", 3, "")
 	flag.StringVar(&perms_list, "pl", "", "")
 	flag.StringVar(&perms_list, "perms-list", "", "")
-	flag.IntVar(&level, "level", 3, "")
 	flag.StringVar(&format, "f", "", "")
 	flag.StringVar(&format, "format", "", "")
+  flag.BoolVar(&allformats, "af", false, "")
 	flag.BoolVar(&allformats, "all-formats", false, "")
 	flag.BoolVar(&list_formats, "lf", false, "")
 	flag.BoolVar(&list_formats, "list-formats", false, "")
@@ -122,6 +126,8 @@ func main() {
 	flag.StringVar(&output, "output", "", "")
 	flag.StringVar(&json_output, "oj", "", "")
 	flag.StringVar(&json_output, "output-json", "", "")
+  flag.StringVar(&csv_output, "oc", "", "")
+  flag.StringVar(&csv_output, "output-csv", "", "")
 	flag.BoolVar(&quiet, "q", false, "")
 	flag.BoolVar(&quiet, "quiet", false, "")
 	flag.BoolVar(&use_color, "c", false, "")
@@ -197,6 +203,8 @@ func main() {
 		format = "<perm>.<domain>.<tld>"
 	}
 
+  var csv_info [][]string
+
 	// define variables which will be used to write buckets to output files
 	var txt_out *os.File
 	if output != "" {
@@ -252,7 +260,7 @@ func main() {
 		perms = core.GetPerms(level) // Default permutations list (285 words)
 	}
 
-	client := core.DefaultHttpClient()
+	client := core.CreateHttpClient(timeout)
 
 	var counter int
 	var wg sync.WaitGroup
@@ -339,6 +347,8 @@ func main() {
 						} else {
 							format_str = format_str + " | GET ACL: Failed"
 						}
+
+            csv_info = append(csv_info, []string{bucket, "false"})
 					} else {
 						groups := map[string]string{
 							"http://acs.amazonaws.com/groups/global/AllUsers":           "Everyone",
@@ -369,6 +379,8 @@ func main() {
 						} else {
 							format_str = fmt.Sprintf(format_str+" | GET ACL: %s", ACL)
 						}
+
+            csv_info = append(csv_info, []string{bucket, "true"})
 					}
 
 					PutObjectInput := &s3.PutObjectInput{
@@ -556,6 +568,8 @@ func main() {
 						} else {
 							format_str = format_str + " | GET ACL: Failed"
 						}
+
+            csv_info = append(csv_info, []string{bucket, "false"})
 					} else {
 						groups := map[string]string{
 							"http://acs.amazonaws.com/groups/global/AllUsers":           "Everyone",
@@ -585,6 +599,8 @@ func main() {
 						} else {
 							format_str = fmt.Sprintf(format_str+" | GET ACL: %s", ACL)
 						}
+
+            csv_info = append(csv_info, []string{bucket, "true"})
 					}
 
 					PutObjectInput := &s3.PutObjectInput{
@@ -688,6 +704,23 @@ func main() {
 		}
 	}
 
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"bucket", "accessible"}
+
+		writer.Write(headers)
+		for _, row := range csv_info {
+			writer.Write(row)
+		}
+	}
+
 	if !quiet {
 		fmt.Println()
 		if counter >= 1 {
@@ -698,6 +731,10 @@ func main() {
 			if json_output != "" {
 				core.Green("Buckets written to "+json_output+" (JSON)", use_color)
 			}
+
+      if csv_output != "" {
+        core.Green("Buckets written to"+csv_output+" (CSV)", use_color)
+      }
 
 			core.Green(strconv.Itoa(counter)+" buckets found", use_color)
 

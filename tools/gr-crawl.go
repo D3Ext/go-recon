@@ -41,19 +41,20 @@ func helpPanel() {
     -l, -list string      file containing a list of urls to crawl (one url per line)
 
   OUTPUT:
-    -o, -output string          file to write urls into
+    -o, -output string          file to write urls into (TXT format)
     -oj, -output-json string    file to write urls into (JSON format)
     -oc, -output-csv string     file to write urls into (CSV format)
 
   CRAWLING:
     -d, -depth int      depth to crawl (default=2)
     -j, -js             only crawl JS endpoints (default=disabled)
-    -path               only crawl urls inside each url path (default=disabled)
     -s, -subs           also crawl subdomains (default=disabled)
+    -path               only crawl urls inside each url path (default=disabled)
     -smart              enable "smart mode" to exclude useless stuff from results
 
   CONFIG:
     -w, -workers int      number of concurrent workers (default=10)
+    -a, -agent string     user agent to include on requests (default=generic agent)
     -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
     -t, -timeout int      millisecond to wait before each request timeout (default=8000)
     -c, -color            print colors on output
@@ -66,6 +67,7 @@ func helpPanel() {
 Examples:
     gr-crawl -u https://example.com -o endpoints.txt -c
     gr-crawl -l urls.txt -d 3 -w 15
+    gr-crawl -l urls.txt -s -smart -c
     gr-crawl -u https://example.com -js -oj urls.json
     cat urls.txt | gr-crawl -path -q
     `)
@@ -74,7 +76,7 @@ Examples:
 var js bool    // define it globally so it's accessible from printResult() function
 var smart bool // define it globally so it's accessible from printResult() function
 
-var smart_exts []string = []string{"png", "jpg", "jpeg"}
+var smart_exts []string = []string{"png", "jpg", "jpeg", "gif", "webp", "svg"}
 
 var smart_filenames []string = []string{"google_tag.script.js", "forms2.min.js", "highcharts.js", "highcharts-more.js", "uc.js", "v2.js", "jquery.min.js"}
 
@@ -88,6 +90,7 @@ func main() {
 	var list string
 	var depth int
 	var workers int
+  var user_agent string
 	var proxy string
 	var output string
 	var json_output string
@@ -109,6 +112,8 @@ func main() {
 	flag.IntVar(&depth, "depth", 2, "")
 	flag.BoolVar(&smart, "smart", false, "")
 	flag.BoolVar(&inside_path, "path", false, "")
+  flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+  flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.IntVar(&workers, "w", 10, "")
 	flag.IntVar(&workers, "workers", 10, "")
 	flag.StringVar(&proxy, "p", "", "")
@@ -156,7 +161,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if fi.Mode()&os.ModeNamedPipe == 0 {
+	if fi.Mode() & os.ModeNamedPipe == 0 {
 		stdin = false
 	} else {
 		stdin = true
@@ -232,7 +237,7 @@ func main() {
 			allowed_doms := []string{hostname}
 
 			c := colly.NewCollector(
-				colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0"),
+				colly.UserAgent(user_agent),
 				colly.AllowedDomains(allowed_doms...),
 				colly.MaxDepth(depth),
 				colly.Async(true),

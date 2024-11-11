@@ -88,7 +88,7 @@ func TimerDiff(t1 time.Time) time.Duration {
 }
 
 func Version() string {
-	return "v0.1"
+	return "v0.2"
 }
 
 func stringInSlice(str string, slice []string) bool {

@@ -46,12 +46,12 @@ type FilterInfo struct {
 func helpPanel() {
 	fmt.Println(`Usage of gr-filter:
   INPUT:
-    -l, -list string      file containing a list of urls to remove duplicates and useless ones (one domain per line)
+    -l, -list string      file containing a list of urls to remove duplicates and useless ones (one domain/url per line)
 
   OUTPUT:
-    -o, -output string          file to write filtered urls/output into
-    -oj, -output-json string    file to write filtered urls into (JSON format)
-    -oc, -output-csv string     file to write filtered urls into (CSV format)
+    -o, -output string          file to write filtered urls/output into (TXT format)
+    -oj, -output-json string    file to write filtered urls/output into (JSON format)
+    -oc, -output-csv string     file to write filtered urls/output into (CSV format)
 
   FILTERS:
     -f, -filter string[]    custom filters to use, separated by comma (i.e. nocontent,hasparams)

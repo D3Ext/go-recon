@@ -1,6 +1,7 @@
 package main
 
 import (
+  "net/http"
 	"bufio"
 	"encoding/csv"
 	"flag"
@@ -21,9 +22,9 @@ var green func(a ...interface{}) string = color.New(color.FgGreen).SprintFunc()
 var magenta func(a ...interface{}) string = color.New(color.FgMagenta).SprintFunc()
 var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc()
 
-func check(url, word string, timeout int, use_color bool) error {
+func check(url, word string, client *http.Client, user_agent string, use_color bool) error {
 	url = strings.TrimSuffix(url, "/")
-	bypasses, status_codes, err := core.Check403(url, word, timeout)
+	bypasses, status_codes, err := core.Check403(url, word, client, user_agent)
 	if err != nil {
 		return err
 	}
@@ -71,6 +72,7 @@ func helpPanel() {
   CONFIG:
     -s, -skip               don't show urls that return 403 status code
     -k, -keyword string     keyword to test in url and headers (default="secret")
+    -a, -agent string       user agent to include on requests (default=generic agent)
     -p, -proxy string       proxy to send requests through (i.e. http://127.0.0.1:8080)
     -w, -workers int        number of concurrent workers (default=10)
     -t, -timeout int        milliseconds to wait before each request timeout (default=5000)
@@ -99,6 +101,7 @@ func main() {
 	var list string
 	var csv_output string
 	var word string
+  var user_agent string
 	var proxy string
 	var workers int
 	var timeout int
@@ -118,6 +121,8 @@ func main() {
 	flag.BoolVar(&skip, "skip", false, "")
 	flag.StringVar(&word, "k", "secret", "")
 	flag.StringVar(&word, "keyword", "secret", "")
+  flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+  flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.StringVar(&proxy, "p", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.IntVar(&workers, "w", 10, "")
@@ -186,8 +191,10 @@ func main() {
 		core.Magenta("Finding possible 403 bypasses...\n", use_color)
 	}
 
+  var client *http.Client = core.CreateHttpClient(timeout)
+
 	if url != "" {
-		check(url, word, timeout, use_color)
+		check(url, word, client, user_agent, use_color)
 
 	} else if (list != "") || (stdin) {
 
@@ -213,7 +220,7 @@ func main() {
 
 			go func() {
 				for u := range urls_c {
-					err = check(u, word, timeout, use_color)
+					err = check(u, word, client, user_agent, use_color)
 					if err != nil {
 						log.Fatal(err)
 					}

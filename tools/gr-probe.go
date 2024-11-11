@@ -28,7 +28,7 @@ var magenta func(a ...interface{}) string = color.New(color.FgMagenta).SprintFun
 var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc()
 
 type UrlsInfo struct {
-	Urls   []string `json:"urls"`
+  Urls   []string `json:"urls"`
 	Length int      `json:"length"`
 	Time   string   `json:"time"`
 }
@@ -40,7 +40,7 @@ func helpPanel() {
     -l, -list string      file containing a list of domains/urls to probe (one url per line)
 
   OUTPUT:
-    -o, -output string          file to write active urls into
+    -o, -output string          file to write active urls into (TXT format)
     -oj, -output-json string    file to write active urls into (JSON format)
     -oc, -output-csv string     file to write active urls into (CSV format)
 
@@ -55,13 +55,14 @@ func helpPanel() {
     -body         show response body instead of active host
 
   CONFIG:
+    -x                    check active domain/host but don't include http:// or https://
     -techs                use go-wappalyzer to detect technologies running on each url
     -nr, -no-redirects    don't follow http redirects
     -s, -skip             don't check http if https is working (default=disabled)
     -m, -method string    requests method (i.e. POST)
     -w, -workers int      number of concurrent workers (split same amount between http and https) (default=20)
+    -a, -agent string     user agent to include on requests (default=generic agent)
     -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
-    -a, -agent string     user agent to include on requests (default=none)
     -t, -timeout int      milliseconds to wait before each request timeout (default=4000)
     -c, -color            use color on output
     -q, -quiet            print neither banner nor logging, only print output
@@ -115,6 +116,7 @@ func main() {
 	var use_color bool
 	var string_to_search string
 	var status_code_to_search int
+  var dont_include_method bool
 	var techs bool
 	var no_redirects bool
 	var show_body bool
@@ -126,7 +128,6 @@ func main() {
 	var help bool
 	var stdin bool
 
-	//-ports                also probe for common HTTP/S ports (i.e. 8080)
 	flag.StringVar(&domain, "d", "", "")
 	flag.StringVar(&domain, "domain", "", "")
 	flag.StringVar(&list, "l", "", "")
@@ -146,14 +147,15 @@ func main() {
 	flag.StringVar(&csv_output, "oc", "", "")
 	flag.StringVar(&csv_output, "output-csv", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
-	flag.StringVar(&user_agent, "a", "", "")
-	flag.StringVar(&user_agent, "agent", "", "")
+	flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+	flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.StringVar(&string_to_search, "fs", "", "")
 	flag.StringVar(&string_to_search, "filter-string", "", "")
 	flag.IntVar(&status_code_to_search, "fc", 0, "")
 	flag.IntVar(&status_code_to_search, "filter-code", 0, "")
 	flag.BoolVar(&no_redirects, "nr", false, "")
 	flag.BoolVar(&no_redirects, "no-redirects", false, "")
+  flag.BoolVar(&dont_include_method, "x", false, "")
 	flag.BoolVar(&techs, "techs", false, "")
 	flag.BoolVar(&show_body, "body", false, "")
 	flag.BoolVar(&status_code, "status", false, "")
@@ -283,10 +285,8 @@ func main() {
 						continue
 					}
 
+          req.Header.Set("User-Agent", user_agent)
 					req.Header.Add("Connection", "close")
-					if user_agent != "" {
-						req.Header.Set("User-Agent", user_agent)
-					}
 					req.Close = true
 
 					resp, err := client.Do(req)
@@ -313,8 +313,13 @@ func main() {
 
 							format_str = formatInfo("https://"+url, use_color, status_code, resp.StatusCode, title, title_str, location, resp_l)
 
-							probed_urls = append(probed_urls, "https://"+url)
-							csv_info = append(csv_info, []string{"https://" + url, strconv.Itoa(resp.StatusCode), title_str})
+              if (dont_include_method) {
+  							probed_urls = append(probed_urls, url)
+  							csv_info = append(csv_info, []string{url, strconv.Itoa(resp.StatusCode), title_str})
+              } else {
+  							probed_urls = append(probed_urls, "https://"+url)
+  							csv_info = append(csv_info, []string{"https://"+url, strconv.Itoa(resp.StatusCode), title_str})
+              }
 
 							if techs {
 								format_str = format_str + getTechs(resp, use_color)
@@ -334,7 +339,7 @@ func main() {
 							counter += 1
 						}
 
-						if skip_http { // skip to next url so it isn't sent through http channel
+						if skip_http { // skip to next url so that it is not sent through http channel
 							continue
 						}
 					}
@@ -358,10 +363,8 @@ func main() {
 						continue
 					}
 
+          req.Header.Set("User-Agent", user_agent)
 					req.Header.Add("Connection", "close")
-					if user_agent != "" {
-						req.Header.Set("User-Agent", user_agent)
-					}
 					req.Close = true
 
 					resp, err := client.Do(req)
@@ -388,8 +391,13 @@ func main() {
 
 							format_str = formatInfo("http://"+url, use_color, status_code, resp.StatusCode, title, title_str, location, resp_l)
 
-							probed_urls = append(probed_urls, "http://"+url)
-							csv_info = append(csv_info, []string{"http://" + url, strconv.Itoa(resp.StatusCode), title_str})
+              if (dont_include_method) {
+  							probed_urls = append(probed_urls, url)
+  							csv_info = append(csv_info, []string{url, strconv.Itoa(resp.StatusCode), title_str})
+              } else {
+  							probed_urls = append(probed_urls, "http://"+url)
+  							csv_info = append(csv_info, []string{"http://"+url, strconv.Itoa(resp.StatusCode), title_str})
+              }
 
 							if techs {
 								format_str = format_str + getTechs(resp, use_color)
@@ -426,8 +434,12 @@ func main() {
 
 		go func() {
 			for o := range out { // receive urls to print from output channel
-				url := strings.Split(o, " ")[0]
+        if (dont_include_method) { // check if (-x) parameter was given to remove http:// and https:// from results
+          o = strings.TrimPrefix(o, "https://")
+          o = strings.TrimPrefix(o, "http://")
+        }
 				fmt.Println(o)
+        url := strings.Split(o, " ")[0]
 
 				if output != "" { // if output file is given, write urls into it
 					_, err = txt_out.WriteString(url + "\n")

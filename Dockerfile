@@ -17,6 +17,7 @@ WORKDIR /app/go-recon
 # compile and install go-recon
 RUN make
 RUN make install
+RUN make extra
 
-WORKDIR /app/go-recon/build
+WORKDIR /
 

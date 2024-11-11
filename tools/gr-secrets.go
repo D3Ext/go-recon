@@ -48,8 +48,8 @@ func helpPanel() {
 
   CONFIG:
     -w, -workers int      number of concurrent workers (default=10)
+    -a, -agent string     user agent to include on requests (default=generic agent)
     -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
-    -a, -agent string     user agent to include on requests (default=none)
     -t, -timeout int      milliseconds to wait before each request timeout (default=5000)
     -c, -color            print colors on output
     -q, -quiet            print neither banner nor logging, only print output
@@ -75,11 +75,11 @@ func main() {
 	var regex string
 	var regex_list string
 	var workers int
+  var user_agent string
 	var proxy string
 	var output string
 	var json_output string
 	var csv_output string
-	var user_agent string
 	var timeout int
 	var quiet bool
 	var use_color bool
@@ -97,6 +97,8 @@ func main() {
 	flag.StringVar(&regex_list, "regex-list", "", "")
 	flag.IntVar(&workers, "w", 10, "")
 	flag.IntVar(&workers, "workers", 10, "")
+  flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+  flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.StringVar(&proxy, "p", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.StringVar(&output, "o", "", "")
@@ -105,8 +107,6 @@ func main() {
 	flag.StringVar(&json_output, "output-json", "", "")
 	flag.StringVar(&csv_output, "oc", "", "")
 	flag.StringVar(&csv_output, "output-csv", "", "")
-	flag.StringVar(&user_agent, "a", "", "")
-	flag.StringVar(&user_agent, "agent", "", "")
 	flag.IntVar(&timeout, "t", 5000, "")
 	flag.IntVar(&timeout, "timeout", 5000, "")
 	flag.BoolVar(&quiet, "q", false, "")
@@ -213,6 +213,7 @@ func main() {
 
 		client := core.CreateHttpClient(timeout)
 		req, _ := http.NewRequest("GET", url, nil)
+    req.Header.Set("User-Agent", user_agent)
 		req.Header.Add("Connection", "close")
 		req.Close = true
 
@@ -251,7 +252,7 @@ func main() {
 
 		} else if regex_list != "" {
 			if !quiet {
-				core.Magenta("Using custom list of regexp...\n", use_color)
+				core.Magenta("Using custom list of regular expressions...\n", use_color)
 			}
 
 			f, err := os.Open(regex_list)
@@ -284,7 +285,7 @@ func main() {
 
 		} else { // enter here if no custom regex was provided
 			if !quiet {
-				core.Magenta("Using default regex...\n", use_color)
+				core.Magenta("Using default regular expression...\n", use_color)
 			}
 
 			for _, secret := range secrets_list {
@@ -337,6 +338,7 @@ func main() {
 
 					client := core.CreateHttpClient(timeout)
 					req, _ := http.NewRequest("GET", js_endpoint, nil)
+          req.Header.Set("User-Agent", user_agent)
 					req.Header.Add("Connection", "close")
 					req.Close = true
 

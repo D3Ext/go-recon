@@ -1,0 +1,9 @@
+{
+  "description:": "filter for strings commonly found on Buffer Overflows errors",
+  "flags": "-HanriE",
+  "patterns": [
+    "stack smashing detected",
+    "Backtrace",
+    "Memory map"
+  ]
+}

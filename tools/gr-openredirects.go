@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+  "encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -36,8 +37,9 @@ func helpPanel() {
     -l, -list string      file containing a list of urls to check open redirects (one url per line)
 
   OUTPUT:
-    -o, -output string          file to write vulnerable urls into
+    -o, -output string          file to write vulnerable urls into (TXT format)
     -oj, -output-json string    file to write vulnerable urls into (JSON format)
+    -oc, -output-csv string     file to write vulnerable urls into (CSV format)
 
   PAYLOADS:
     -k, -keyword string           keyword to replace in urls with payloads (default=FUZZ)
@@ -47,8 +49,8 @@ func helpPanel() {
   CONFIG:
     -w, -workers int        number of concurrent workers (default=15)
     -m, -method string      requests method (GET, POST, PUT...)
+    -a, -agent string       user agent to include on requests (default=generic agent)
     -p, -proxy string       proxy to send requests through (i.e. http://127.0.0.1:8080)
-    -a, -agent string       user agent to include on requests (default=none)
     -t, -timeout int        milliseconds to wait before each request timeout (default=5000)
     -c, -color              use color on output
     -q, -quiet              print neither banner nor logging, only print output
@@ -82,6 +84,7 @@ func main() {
 	var user_agent string
 	var output string
 	var json_output string
+  var csv_output string
 	var use_color bool
 	var quiet bool
 	var version bool
@@ -102,6 +105,8 @@ func main() {
 	flag.IntVar(&workers, "workers", 10, "")
 	flag.StringVar(&method, "m", "GET", "")
 	flag.StringVar(&method, "method", "GET", "")
+	flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+	flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.StringVar(&proxy, "p", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.IntVar(&timeout, "t", 4000, "")
@@ -110,8 +115,8 @@ func main() {
 	flag.StringVar(&output, "output", "", "")
 	flag.StringVar(&json_output, "oj", "", "")
 	flag.StringVar(&json_output, "output-json", "", "")
-	flag.StringVar(&user_agent, "a", "", "")
-	flag.StringVar(&user_agent, "agent", "", "")
+  flag.StringVar(&csv_output, "oc", "", "")
+  flag.StringVar(&csv_output, "output-csv", "", "")
 	flag.BoolVar(&use_color, "c", false, "")
 	flag.BoolVar(&use_color, "color", false, "")
 	flag.BoolVar(&quiet, "q", false, "")
@@ -178,6 +183,7 @@ func main() {
 	// Create requests client
 	client := core.CreateHttpClientFollowRedirects(timeout)
 
+  var csv_info [][]string
 	var payloads []string
 
 	if skip { // set unique payload if user only want to use one
@@ -253,10 +259,8 @@ func main() {
 						continue
 					}
 
+          req.Header.Set("User-Agent", user_agent)
 					req.Header.Add("Connection", "close")
-					if user_agent != "" { // Check if user agent has value
-						req.Header.Set("User-Agent", user_agent)
-					}
 					req.Close = true
 
 					resp, err := client.Do(req) // Send requests with out custom client config
@@ -269,6 +273,7 @@ func main() {
 						if strings.Contains(resp.Request.URL.String(), redirectTarget) {
 							fmt.Println(new_url)
 							found_redirects = append(found_redirects, new_url)
+              csv_info = append(csv_info, []string{url, payload})
 							counter += 1
 
 							if output != "" { // Write url with payload to output file
@@ -308,10 +313,8 @@ func main() {
 							continue
 						}
 
+            req.Header.Set("User-Agent", user_agent)
 						req.Header.Add("Connection", "close")
-						if user_agent != "" { // Check if user agent has value
-							req.Header.Set("User-Agent", user_agent)
-						}
 						req.Close = true
 
 						resp, err := client.Do(req) // Send requests with out custom client config
@@ -324,6 +327,7 @@ func main() {
 							if strings.Contains(resp.Request.URL.String(), redirectTarget) {
 								fmt.Println(new_url)
 								found_redirects = append(found_redirects, new_url)
+                csv_info = append(csv_info, []string{url, payload})
 								counter += 1
 
 								if output != "" { // Write url with payload to output file
@@ -394,6 +398,23 @@ func main() {
 		}
 	}
 
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"url", "payload"}
+
+		writer.Write(headers)
+		for _, row := range csv_info {
+			writer.Write(row)
+		}
+	}
+
 	// Finally some logging to aid users
 	if !quiet {
 		if counter >= 1 {
@@ -411,6 +432,10 @@ func main() {
 			if json_output != "" {
 				core.Green("Urls written to "+json_output+" (JSON)", use_color)
 			}
+
+      if csv_output != "" {
+        core.Green("Urls written to "+csv_output+" (CSV)", use_color)
+      }
 		}
 
 		if use_color {

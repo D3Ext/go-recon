@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+  "encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -52,8 +53,9 @@ func helpPanel() {
     -l, -list string        file containing a list of domains to find their subdomains (one domain per line)
 
   OUTPUT:
-    -o, -output string          file to write subdomains into
+    -o, -output string          file to write subdomains into (TXT format)
     -oj, -output-json string    file to write subdomains into (JSON format)
+    -oc, -output-csv string     file to write subdomains into (CSV format)
 
   PROVIDERS:
     -all                      use all available providers to discover subdomains (slower than default)
@@ -73,7 +75,7 @@ func helpPanel() {
 Examples:
     gr-subdomains -d example.com -o subdomains.txt -c
     gr-subdomains -l domains.txt -p crt,hackertarget -t 8000
-    cat domain.txt | gr-subdomains -all
+    cat domain.txt | gr-subdomains -all -q
     cat domain.txt | gr-subdomains -p anubis -oj subdomains.json -c
     `)
 }
@@ -87,6 +89,7 @@ func main() {
 	var list_providers bool
 	var output string
 	var json_output string
+  var csv_output string
 	var proxy string
 	var stdin bool
 	var timeout int
@@ -108,6 +111,8 @@ func main() {
 	flag.StringVar(&output, "output", "", "")
 	flag.StringVar(&json_output, "oj", "", "")
 	flag.StringVar(&json_output, "output-json", "", "")
+  flag.StringVar(&csv_output, "oc", "", "")
+  flag.StringVar(&csv_output, "output-csv", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.IntVar(&timeout, "t", 5000, "")
 	flag.IntVar(&timeout, "timeout", 5000, "")
@@ -192,6 +197,7 @@ func main() {
 	var counter int
 	var total_counter int
 	var found_subdomains []string
+  var csv_info [][]string
 
 	client := core.CreateHttpClient(timeout)
 
@@ -228,6 +234,8 @@ func main() {
 							log.Fatal(err)
 						}
 					}
+
+          csv_info = append(csv_info, []string{subdomain, domain})
 
 					counter++
 				}
@@ -299,6 +307,8 @@ func main() {
 						}
 					}
 
+          csv_info = append(csv_info, []string{subdomain, domain})
+
 					total_counter += 1
 					counter++
 				}
@@ -352,6 +362,23 @@ func main() {
 		}
 	}
 
+	if csv_output != "" {
+		csv_out, err := os.Create(csv_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		writer := csv.NewWriter(csv_out)
+		defer writer.Flush()
+
+		headers := []string{"subdomain", "domain"}
+
+		writer.Write(headers)
+		for _, row := range csv_info {
+			writer.Write(row)
+		}
+	}
+
 	// Finally some logging to aid users
 	if !quiet {
 		if total_counter >= 1 {
@@ -370,10 +397,16 @@ func main() {
 
 		if total_counter >= 1 || counter >= 1 { // Check if at least one url was vulnerable to open redirect
 			if output != "" {
-				core.Green("Subdomains written to "+output, use_color)
-			} else if json_output != "" {
-				core.Green("Subdomains written to "+json_output, use_color)
+				core.Green("Subdomains written to "+output+" (TXT)", use_color)
 			}
+
+      if json_output != "" {
+				core.Green("Subdomains written to "+json_output+" (JSON)", use_color)
+			}
+
+      if csv_output != "" {
+        core.Green("Subdomains written to "+csv_output+" (CSV)", use_color)
+      }
 		}
 
 		if use_color {

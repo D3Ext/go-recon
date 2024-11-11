@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	maldev "github.com/D3Ext/maldev/misc"
 	"github.com/fatih/color"
 	"io/ioutil"
 	"log"
 	"net/http"
 	nu "net/url"
 	"os"
+  "slices"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,6 +28,17 @@ var green func(a ...interface{}) string = color.New(color.FgGreen).SprintFunc()
 var magenta func(a ...interface{}) string = color.New(color.FgMagenta).SprintFunc()
 var yellow func(a ...interface{}) string = color.New(color.FgYellow).SprintFunc()
 
+type UrlsInfo struct {
+	Results   []WafResult `json:"results"`
+	Length int            `json:"length"`
+	Time   string         `json:"time"`
+}
+
+type WafResult struct {
+  Url string `json:"url"`
+  Waf string `json:"waf"`
+}
+
 func helpPanel() {
 	fmt.Println(`Usage of gr-waf:
   INPUT:
@@ -35,17 +46,19 @@ func helpPanel() {
     -l, -list string      file containing a list of urls to identify their WAFs (one url per line)
 
   OUTPUT:
-    -o, -output string    file to write discovered WAFs into (CSV format)
+    -o, -output string          file to write discovered WAFs into (TXT format)
+    -oj, -output-json string    file to write discovered WAFs into (JSON format)
+    -oc, -output-csv string     file to write discovered WAFs into (CSV format)
 
   CONFIG:
-    -p, -payload string     payload used to trigger WAF (default=../../../../../etc/passwd)
+    -x                      only test one single payload to try to identify the running WAF (useful for in-mass recon)
     -k, -keyword string     keyword to replace in urls (if url doesn't contain keyword no change is done) (default=FUZZ)
     -w, -workers int        number of concurrent workers (default=15)
-    -proxy string           proxy to send requests through (i.e. http://127.0.0.1:8080)
-    -a, -agent string       user agent to include on requests (default=random)
+    -a, -agent string       user agent to include on requests (default=generic agent)
+    -p, -proxy string       proxy to send requests through (i.e. http://127.0.0.1:8080)
     -t, -timeout int        milliseconds to wait before timeout (default=4000)
     -c, -color              print colors on output (recommended)
-    -q, -color              print neither banner nor logging, only print output
+    -q, -quiet              print neither banner nor logging, only print output
 
   DEBUG:
     -version      show go-recon version
@@ -53,8 +66,8 @@ func helpPanel() {
   
 Examples:
     gr-waf -u https://example.com -c
-    gr-waf -u https://example.com/index.php?foo=FUZZ -k FUZZ -q
-    gr-waf -u https://example.com/index.php?foo=FUZZ -p "' or 1=1-- -"
+    gr-waf -u https://example.com/index.php?foo=FUZZ -p "http://127.0.0.1:8000"
+    gr-waf -u https://example.com/index.php?foo=TEST -k TEST -q
     cat urls.txt | gr-waf -t 8000 -c
     `)
 }
@@ -65,8 +78,10 @@ var csv_info [][]string
 func main() {
 	var url string
 	var list string
+  var output string
+  var json_output string
 	var csv_output string
-	var payload string
+  var one_payload bool
 	var keyword string
 	var workers int
 	var proxy string
@@ -82,10 +97,13 @@ func main() {
 	flag.StringVar(&url, "url", "", "")
 	flag.StringVar(&list, "l", "", "")
 	flag.StringVar(&list, "list", "", "")
-	flag.StringVar(&csv_output, "o", "", "")
-	flag.StringVar(&csv_output, "output", "", "")
-	flag.StringVar(&payload, "p", "../../../../../etc/passwd", "")
-	flag.StringVar(&payload, "payload", "../../../../../etc/passwd", "")
+	flag.StringVar(&output, "o", "", "")
+	flag.StringVar(&output, "output", "", "")
+	flag.StringVar(&json_output, "oj", "", "")
+	flag.StringVar(&json_output, "json-output", "", "")
+	flag.StringVar(&csv_output, "oc", "", "")
+	flag.StringVar(&csv_output, "output-csv", "", "")
+  flag.BoolVar(&one_payload, "x", false, "")
 	flag.StringVar(&keyword, "k", "FUZZ", "")
 	flag.StringVar(&keyword, "keyword", "FUZZ", "")
 	flag.IntVar(&workers, "w", 15, "")
@@ -93,8 +111,8 @@ func main() {
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.IntVar(&timeout, "t", 4000, "")
 	flag.IntVar(&timeout, "timeout", 4000, "")
-	flag.StringVar(&user_agent, "a", "", "")
-	flag.StringVar(&user_agent, "agent", "", "")
+	flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
+	flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.BoolVar(&use_color, "c", false, "")
 	flag.BoolVar(&use_color, "color", false, "")
 	flag.BoolVar(&quiet, "q", false, "")
@@ -151,16 +169,14 @@ func main() {
 	}
 
 	client := core.CreateHttpClient(timeout)
-	user_agent = maldev.GetRandomAgent()
 
-	//var json_url string = "https://raw.githubusercontent.com/D3Ext/AORT/main/utils/wafsign.json"
 	var json_url string = "https://raw.githubusercontent.com/D3Ext/go-recon/main/utils/waf_vendors.json"
 	var m map[string]interface{}
 
 	// send request to waf vendors data (json format)
 	req, _ := http.NewRequest("GET", json_url, nil)
+  req.Header.Set("User-Agent", user_agent)
 	req.Header.Add("Connection", "keep-alive")
-	req.Header.Set("User-Agent", user_agent)
 	req.Close = true
 
 	resp, err := client.Do(req) // Send request
@@ -187,6 +203,29 @@ func main() {
 		}
 	}
 
+  // create TXT output file
+	var txt_out *os.File
+	if output != "" {
+		txt_out, err = os.Create(output)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+  // define variable to hold waf results
+  var waf_results []WafResult
+  var total_urls []string
+  var found_wafs []string
+
+  var payloads_to_use []string
+  var payload string
+
+  if one_payload { // only use on payload
+    payloads_to_use = []string{"../../../../../etc/passwd"}
+  } else { // use multiple payloads
+    payloads_to_use = []string{"../../../../../etc/passwd", "' or 1=1-- -", "\"><script>alert(window.origin)</script>"}
+  }
+
 	if url != "" {
 
 		// Parse given url
@@ -212,9 +251,9 @@ func main() {
 		if !quiet {
 			if param_to_test == "" { // enter here if no parameter to test is given
 				if use_color {
-					fmt.Println("[" + red("!") + "] No parameters detected so analysis may not be accurated")
+					fmt.Println("[" + red("!") + "] No parameters detected so analysis may not be accurated enough")
 				} else {
-					fmt.Println("[!] No parameters detected so analysis may not be accurated")
+					fmt.Println("[!] No parameters detected so analysis may not be accurated enough")
 				}
 			} else {
 				if use_color {
@@ -229,8 +268,8 @@ func main() {
 		}
 
 		req, _ = http.NewRequest("GET", url, nil)
+    req.Header.Set("User-Agent", user_agent)
 		req.Header.Add("Connection", "keep-alive")
-		req.Header.Set("User-Agent", user_agent)
 		req.Close = true
 
 		resp, err = client.Do(req) // Send request
@@ -239,160 +278,112 @@ func main() {
 		}
 
 		if !quiet {
-			core.Green("Connection succeeded", use_color)
-			core.Magenta("User-Agent: "+user_agent, use_color)
+			core.Green("Connection succeeded\n", use_color)
+      if use_color {
+			  core.Magenta("User-Agent: "+cyan(user_agent), use_color)
+      } else {
+        core.Magenta("User-Agent: "+user_agent, use_color)
+      }
 		}
 
-		var payload_url string // Define url with payload
-		if (strings.HasSuffix(url, "/")) && (param_to_test == "") {
-			payload_url = url + payload
+    for _, payload := range payloads_to_use {
+      if !one_payload {
+        fmt.Println()
+      }
 
-		} else if (!strings.HasSuffix(url, "/")) && (param_to_test == "") {
-			payload_url = url + "/" + payload
+      var payload_url string // Define url with payload
+      if (strings.HasSuffix(url, "/")) && (param_to_test == "") {
+        payload_url = url + payload
 
-		} else if (!strings.HasSuffix(url, "/")) && (param_to_test != "") {
-			payload_url = strings.ReplaceAll(url, keyword, payload)
-		}
+      } else if (!strings.HasSuffix(url, "/")) && (param_to_test == "") {
+        payload_url = url + "/" + payload
 
-		if !quiet {
-			if use_color {
-				fmt.Println("["+magenta("*")+"] Payload url:", cyan(payload_url))
-			} else {
-				fmt.Println("[*] Payload url:", payload_url)
-			}
-		}
+      } else if (!strings.HasSuffix(url, "/")) && (param_to_test != "") {
+        payload_url = strings.ReplaceAll(url, keyword, payload)
+      }
 
-		req, _ = http.NewRequest("GET", payload_url, nil)
-		req.Header.Add("Connection", "close")
-		req.Header.Set("User-Agent", user_agent)
-		req.Close = true
+      if !quiet {
+        if use_color {
+          fmt.Println("["+magenta("*")+"] Payload url:", cyan(payload_url))
+        } else {
+          fmt.Println("[*] Payload url:", payload_url)
+        }
+      }
 
-		resp, err = client.Do(req) // Send request
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer resp.Body.Close()
+      req, _ = http.NewRequest("GET", payload_url, nil)
+      req.Header.Set("User-Agent", user_agent)
+      req.Header.Add("Connection", "close")
+      req.Close = true
 
-		if !quiet {
-			if use_color {
-				if resp.StatusCode >= 400 {
-					fmt.Println("["+red("!")+"] Status code:", cyan(resp.StatusCode))
-				} else if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-					fmt.Println("["+blue("*")+"] Status code:", cyan(resp.StatusCode))
-				} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-					fmt.Println("["+green("+")+"] Status code:", cyan(resp.StatusCode))
-				}
-				fmt.Println("[" + magenta("*") + "] Comparing values... (headers, response, cookies, status code)")
-			} else {
-				if resp.StatusCode >= 400 {
-					fmt.Println("[!] Status code:", resp.StatusCode)
-				} else if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-					fmt.Println("[*] Status code:", resp.StatusCode)
-				} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-					fmt.Println("[+] Status code:", resp.StatusCode)
-				}
-				fmt.Println("[*] Comparing values... (headers, response, cookies, status code)")
-			}
-		}
+      resp, err = client.Do(req) // Send request
+      if err != nil {
+        log.Fatal(err)
+      }
+      defer resp.Body.Close()
 
-		// Define some values which are compared with WAF vendors data to detect them
-		var cookies []string
-		var headers []string
+      if !quiet {
+        if use_color {
+          if resp.StatusCode >= 400 {
+            fmt.Println("["+red("!")+"] Status code:", cyan(resp.StatusCode))
+          } else if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+            fmt.Println("["+blue("*")+"] Status code:", cyan(resp.StatusCode))
+          } else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+            fmt.Println("["+green("+")+"] Status code:", cyan(resp.StatusCode))
+          }
+          fmt.Println("[" + magenta("*") + "] Comparing values... (headers, response, cookies, status code)")
+        } else {
+          if resp.StatusCode >= 400 {
+            fmt.Println("[!] Status code:", resp.StatusCode)
+          } else if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+            fmt.Println("[*] Status code:", resp.StatusCode)
+          } else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+            fmt.Println("[+] Status code:", resp.StatusCode)
+          }
+          fmt.Println("[*] Comparing values... (headers, response, cookies, status code)")
+        }
+      }
 
-		var nl_prefix string
-		if !quiet { // if quiet, don't print new line to maintain format
-			nl_prefix = "\n"
-		}
+      result, key := checkWaf(m, resp)
 
-		code := strconv.Itoa(resp.StatusCode)   // Get status code
-		page, _ := ioutil.ReadAll(resp.Body)    // Parse page content
-		for _, cookie := range resp.Cookies() { // Parse cookie names and values to compare them later
-			cookies = append(cookies, cookie.Name)
-			cookies = append(cookies, cookie.Value)
-		}
+      if result == true {
+        if !slices.Contains(found_wafs, key) {
+          found_wafs = append(found_wafs, key)
+        }
+      }
+    }
 
-		for key, values := range resp.Header { // Parse headers
-			headers = append(headers, key)
-			for _, v := range values {
-				headers = append(headers, v)
-			}
-		}
+    if len(found_wafs) == 0 {
+      if use_color {
+        fmt.Println("\n[" + red("-") + "] WAF not found")
+      } else {
+        fmt.Println("\n[-] WAF not found")
+      }
+    }
 
-		var result float32 = 0
-		for key, value := range m { // iterate over json data
-			code_to_check, _ := Find(value, "code")
-			if code_to_check.(string) != "" {
-				res, err := regexp.MatchString(code_to_check.(string), code)
-				if err != nil {
-					continue
-				}
+    if len(found_wafs) == 1 {
+      if use_color {
+        fmt.Println("\n["+green("+")+"] WAF found:", cyan(found_wafs[0]))
+      } else {
+        fmt.Println("\n[+] WAF found:", found_wafs[0])
+      }
+    } else if len(found_wafs) > 1 {
+      fmt.Println()
+      core.Green("Multiple WAFs were detected:", use_color)
+      for _, w := range found_wafs {
+        fmt.Println("  " + w)
+      }
 
-				if res {
-					result += 0.5
-				}
-			}
+      if output != "" {
+        _, err = txt_out.WriteString(url + " - " + strings.Join(found_wafs[:], "|") + "\n")
+        if err != nil {
+          log.Fatal(err)
+        }
+      }
 
-			page_to_check, _ := Find(value, "page")
-			if page_to_check.(string) != "" {
-				res, err := regexp.MatchString(page_to_check.(string), string(page))
-				if err != nil {
-					continue
-				}
-
-				if res {
-					result += 1
-				}
-			}
-
-			headers_to_check, _ := Find(value, "headers")
-			if headers_to_check.(string) != "" {
-				for _, h := range headers {
-					res, err := regexp.MatchString(headers_to_check.(string), h)
-					if err != nil {
-						continue
-					}
-
-					if res {
-						result += 1
-					}
-				}
-			}
-
-			cookies_to_check, _ := Find(value, "cookie")
-			if cookies_to_check.(string) != "" {
-				for _, c := range cookies {
-					res, err := regexp.MatchString(cookies_to_check.(string), c)
-					if err != nil {
-						continue
-					}
-
-					if res {
-						result += 1
-					}
-				}
-			}
-
-			if result >= 1 {
-				if use_color {
-					fmt.Println(nl_prefix+"["+green("+")+"] WAF found:", cyan(key))
-				} else {
-					fmt.Println(nl_prefix+"[+] WAF found:", key)
-				}
-
-				csv_info = append(csv_info, []string{url, key})
-				break
-			}
-
-			result = 0
-		}
-
-		if result == 0 {
-			if use_color {
-				fmt.Println(nl_prefix + "[" + red("-") + "] WAF not found")
-			} else {
-				fmt.Println(nl_prefix + "[-] WAF not found")
-			}
-		}
+      total_urls = append(total_urls, url)
+      waf_results = append(waf_results, WafResult{Url: url, Waf: strings.Join(found_wafs[:], "|")})
+      csv_info = append(csv_info, []string{url, strings.Join(found_wafs[:], "|")})
+    }
 
 	} else if (list != "") || (stdin) {
 
@@ -418,120 +409,63 @@ func main() {
 			go func() {
 				for u := range urls_c { // get url from channel
 
-					if (!strings.HasPrefix(u, "http://")) && (!strings.HasPrefix(u, "https://")) {
-						url = "https://" + u
-					}
+          for _, payload := range payloads_to_use {
+            if (!strings.HasPrefix(u, "http://")) && (!strings.HasPrefix(u, "https://")) {
+              url = "https://" + u
+            }
 
-					if strings.HasSuffix(u, "=") {
-						url = u + payload
+            if strings.HasSuffix(u, "=") {
+              url = u + payload
 
-					} else if !strings.HasSuffix(u, "/") {
-						url = u + "/" + payload
-					}
+            } else if !strings.HasSuffix(u, "/") {
+              url = u + "/" + payload
+            }
 
-					req, _ := http.NewRequest("GET", url, nil)
-					req.Header.Add("Connection", "close")
-					req.Header.Set("User-Agent", user_agent)
-					req.Close = true
+            req, _ := http.NewRequest("GET", url, nil)
+            req.Header.Set("User-Agent", user_agent)          
+            req.Header.Add("Connection", "close")
+            req.Close = true
 
-					resp, err := client.Do(req) // Send request
-					if err != nil {
-						log.Fatal(err)
-					}
-					defer resp.Body.Close()
+            resp, err := client.Do(req) // Send request
+            if err != nil {
+              log.Fatal(err)
+            }
+            defer resp.Body.Close()
 
-					// Define some values which are compared with WAF vendors data to detect them
-					var cookies []string
-					var headers []string
+            // compare web response with WAF vendors data
+            result, key := checkWaf(m, resp)
 
-					code := strconv.Itoa(resp.StatusCode)   // Get status code
-					page, _ := ioutil.ReadAll(resp.Body)    // Parse page content
-					for _, cookie := range resp.Cookies() { // Parse cookie names and values to compare them later
-						cookies = append(cookies, cookie.Name)
-						cookies = append(cookies, cookie.Value)
-					}
+            if result == true {
+              found_wafs = append(found_wafs, key)
 
-					for key, values := range resp.Header { // Parse headers
-						headers = append(headers, key)
-						for _, v := range values {
-							headers = append(headers, v)
-						}
-					}
+              if use_color {
+                fmt.Println(u, "-", cyan(key))
+              } else {
+                fmt.Println(u, "-", key)
+              }
 
-					var result float32 = 0
-					for key, value := range m { // iterate over json data
-						code_to_check, _ := Find(value, "code")
-						if code_to_check.(string) != "" {
-							res, err := regexp.MatchString(code_to_check.(string), code)
-							if err != nil {
-								continue
-							}
+              if output != "" {
+                _, err = txt_out.WriteString(u + " - " + key + "\n")
+                if err != nil {
+                  log.Fatal(err)
+                }
+              }
 
-							if res {
-								result += 0.5
-							}
-						}
+              total_urls = append(total_urls, u)
+              waf_results = append(waf_results, WafResult{Url: u, Waf: key})
+              csv_info = append(csv_info, []string{u, key})
 
-						page_to_check, _ := Find(value, "page")
-						if page_to_check.(string) != "" {
-							res, err := regexp.MatchString(page_to_check.(string), string(page))
-							if err != nil {
-								continue
-							}
+              break // break loop since the WAF has been discovered
+            }
+          }
 
-							if res {
-								result += 1
-							}
-						}
-
-						headers_to_check, _ := Find(value, "headers")
-						if headers_to_check.(string) != "" {
-							for _, h := range headers {
-								res, err := regexp.MatchString(headers_to_check.(string), h)
-								if err != nil {
-									continue
-								}
-
-								if res {
-									result += 1
-								}
-							}
-						}
-
-						cookies_to_check, _ := Find(value, "cookie")
-						if cookies_to_check.(string) != "" {
-							for _, c := range cookies {
-								res, err := regexp.MatchString(cookies_to_check.(string), c)
-								if err != nil {
-									continue
-								}
-
-								if res {
-									result += 1
-								}
-							}
-						}
-
-						if result >= 1 {
-							if use_color {
-								fmt.Println(u, "-", cyan(key))
-							} else {
-								fmt.Println(u, "-", key)
-							}
-							csv_info = append(csv_info, []string{u, key})
-							break
-						}
-
-						result = 0
-					}
-
-					if result == 0 {
-						if use_color {
-							fmt.Println(u, "-", red("Not found"))
-						} else {
-							fmt.Println(u, "-", "Not found")
-						}
-					}
+          if len(found_wafs) == 0 {
+            if use_color {
+              fmt.Println(u, "-", red("Not found"))
+            } else {
+              fmt.Println(u, "-", "Not found")
+            }
+          }
 				}
 
 				wg.Done() // finish worker
@@ -565,6 +499,29 @@ func main() {
 		wg.Wait()
 	}
 
+	if json_output != "" {
+		json_urls := UrlsInfo{
+			Results:  waf_results,
+			Length:   len(total_urls),
+			Time:     core.TimerDiff(t1).String(),
+		}
+
+		json_body, err := json.Marshal(json_urls)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		json_out, err := os.Create(json_output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		_, err = json_out.WriteString(string(json_body))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	if csv_output != "" {
 		csv_out, err := os.Create(csv_output)
 		if err != nil {
@@ -584,7 +541,15 @@ func main() {
 
 	if !quiet {
 		fmt.Println()
-		if csv_output != "" {
+    if output != "" {
+      core.Green("Discovered WAFs written to "+output+" (TXT)", use_color)
+    }
+
+    if json_output != "" {
+      core.Green("Discovered WAFs written to "+json_output+" (JSON)", use_color)
+    }
+
+    if csv_output != "" {
 			core.Green("Discovered WAFs written to "+csv_output+" (CSV)", use_color)
 		}
 
@@ -596,7 +561,97 @@ func main() {
 	}
 }
 
-func Find(o interface{}, key string) (interface{}, bool) { // Function used to find key values
+func checkWaf(m map[string]interface{}, resp *http.Response) (bool, string) {
+  // Define some values which are compared with WAF vendors data to detect them
+  var cookies []string
+  var headers []string
+
+  code := strconv.Itoa(resp.StatusCode)   // Get status code
+  page, _ := ioutil.ReadAll(resp.Body)    // Parse page content
+  for _, cookie := range resp.Cookies() { // Parse cookie names and values to compare them later
+    cookies = append(cookies, cookie.Name)
+    cookies = append(cookies, cookie.Value)
+  }
+
+  for key, values := range resp.Header { // Parse headers
+    headers = append(headers, key)
+    for _, v := range values {
+      headers = append(headers, v)
+    }
+  }
+
+  // define variable to determine whether the WAF has been discovered or not
+  var result float32 = 0
+
+  for key, value := range m { // iterate over json data
+
+    code_to_check, _ := find(value, "code") // check response status code
+    if code_to_check.(string) != "" {
+      res, err := regexp.MatchString(code_to_check.(string), code)
+      if err != nil {
+        continue
+      }
+
+      if res {
+        result += 0.5
+      }
+    }
+
+    page_to_check, _ := find(value, "page") // check specific strings
+    if page_to_check.(string) != "" {
+      res, err := regexp.MatchString(page_to_check.(string), string(page))
+      if err != nil {
+        continue
+      }
+      //fmt.Println(res)
+      //fmt.Println(page_to_check.(string))
+      //fmt.Println(string(page))
+
+      if res {
+        result += 1
+      }
+    }
+
+    headers_to_check, _ := find(value, "headers") // check response headers
+    if headers_to_check.(string) != "" {
+      for _, h := range headers {
+        res, err := regexp.MatchString(headers_to_check.(string), h)
+        if err != nil {
+          continue
+        }
+
+        if res {
+          result += 1
+        }
+      }
+    }
+
+    cookies_to_check, _ := find(value, "cookie") // check present cookies 
+    if cookies_to_check.(string) != "" {
+      for _, c := range cookies {
+        res, err := regexp.MatchString(cookies_to_check.(string), c)
+        if err != nil {
+          continue
+        }
+
+        if res {
+          result += 1
+        }
+      }
+    }
+
+    // check if WAF was found to skip remaining checks
+    if result >= 1 {
+      return true, key
+    }
+
+    result = 0
+  }
+
+  return false, ""
+}
+
+func find(o interface{}, key string) (interface{}, bool) { // Function used to find key values
 	//if the argument is not a map, ignore it
 	mobj, ok := o.(map[string]interface{})
 	if !ok {
@@ -611,7 +666,7 @@ func Find(o interface{}, key string) (interface{}, bool) { // Function used to f
 
 		// if the value is a map, search recursively
 		if m, ok := v.(map[string]interface{}); ok {
-			if res, ok := Find(m, key); ok {
+			if res, ok := find(m, key); ok {
 				return res, true
 			}
 		}
@@ -620,7 +675,7 @@ func Find(o interface{}, key string) (interface{}, bool) { // Function used to f
 		// from each element
 		if va, ok := v.([]interface{}); ok {
 			for _, a := range va {
-				if res, ok := Find(a, key); ok {
+				if res, ok := find(a, key); ok {
 					return res, true
 				}
 			}
@@ -630,3 +685,5 @@ func Find(o interface{}, key string) (interface{}, bool) { // Function used to f
 	// element not found
 	return nil, false
 }
+
+

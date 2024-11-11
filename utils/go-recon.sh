@@ -31,19 +31,19 @@ mkdir "${domain}"
 
 # find subdomains and save to file
 echo -e "[*] Looking for subdomains..."
-gr-subdomains -d "${domain}" -o "${domain}/subdomains.txt"
+gr-subdomains -d "${domain}" -all -o "${domain}/subdomains.txt" -q
 
 sleep 0.1
 
 # probe active subdomains
 echo -e "\n[*] Proving active subdomains..."
-gr-probe -l "${domain}/subdomains.txt" -o "${domain}/active_subdomains.txt" -skip
+gr-probe -l "${domain}/subdomains.txt" -o "${domain}/active_subdomains.txt" -skip -q
 
 sleep 0.1
 
 # fetching urls from WaybackMachine api
 echo -e "\n[*] Retrieving urls from WaybackMachine..."
-gr-urls -d "${domain}" -o "${domain}/urls.txt"
+gr-urls -d "${domain}" -o "${domain}/urls.txt" -q
 
 sleep 0.1
 
@@ -62,7 +62,7 @@ sleep 0.1
 
 # find potential 403 bypasses
 echo -e "\n[*] Finding potential 403 bypasses"
-gr-probe -l "${domain}/subdomains.txt" -fc 403 -skip -q | gr-403 -o "${domain}/403_bypass_urls.txt" -skip
+gr-probe -l "${domain}/subdomains.txt" -fc 403 -skip -q | gr-403 -o "${domain}/403_bypass_urls.txt" -skip -c
 
 sleep 0.1
 
@@ -80,7 +80,7 @@ sleep 0.1
 
 # discovering .js endpoints
 echo -e "\n[*] Retrieving JS endpoints..."
-gr-crawl -l "${domain}/active_subdomains.txt" -d 1 -js -o "${domain}/js_endpoints.txt"
+gr-crawl -l "${domain}/active_subdomains.txt" -d 3 -js -o "${domain}/js_endpoints.txt"
 
 sleep 0.1
 
@@ -109,7 +109,7 @@ sleep 0.1
 
 # identify WAFs
 echo -e "\n[*] Identifying running WAFs..."
-gr-waf -l "${domain}/active_subdomains.txt" -o "${domain}/wafs.csv" -c
+gr-waf -l "${domain}/active_subdomains.txt" -o "${domain}/wafs.txt" -c
 
 sleep 0.1
 

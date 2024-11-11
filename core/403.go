@@ -10,7 +10,7 @@ import (
 // returns slice of urls with payloads on them,
 // a slice with their respective status codes, and
 // finally an error
-func Check403(url, word string, timeout int) ([]string, []int, error) {
+func Check403(url, word string, client *http.Client, user_agent string) ([]string, []int, error) {
 
 	url = strings.TrimSuffix(url, "/")
 
@@ -44,7 +44,7 @@ func Check403(url, word string, timeout int) ([]string, []int, error) {
 		go func(p string) {
 			defer wg.Done()
 
-			code, err := sendRequest(p, timeout)
+			code, err := sendRequest(p, client, user_agent)
 			if err != nil {
 				errs <- err
 			}
@@ -77,7 +77,7 @@ func Check403(url, word string, timeout int) ([]string, []int, error) {
 		go func(x int) {
 			defer wg2.Done()
 
-			code, err := sendRequestWithHeader(url+"/"+word, timeout, header_payloads[x], header_values[x])
+			code, err := sendRequestWithHeader(url+"/"+word, client, user_agent, header_payloads[x], header_values[x])
 			if err != nil {
 				errs <- err
 			}
@@ -103,10 +103,15 @@ func Check403(url, word string, timeout int) ([]string, []int, error) {
 	return url_payloads, status_codes, nil
 }
 
-func sendRequest(url_to_check string, timeout int) (int, error) {
-	c := CreateHttpClient(timeout)
+func sendRequest(url_to_check string, client *http.Client, user_agent string) (int, error) {
 
-	resp, err := c.Get(url_to_check)
+	req, err := http.NewRequest("GET", url_to_check, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("User-Agent", user_agent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -115,16 +120,16 @@ func sendRequest(url_to_check string, timeout int) (int, error) {
 	return resp.StatusCode, nil
 }
 
-func sendRequestWithHeader(url_to_check string, timeout int, header, value string) (int, error) {
-	c := CreateHttpClient(timeout)
+func sendRequestWithHeader(url_to_check string, client *http.Client, user_agent string, header string, value string) (int, error) {
 
 	req, err := http.NewRequest("GET", url_to_check, nil)
 	if err != nil {
 		return 0, err
 	}
 
+  req.Header.Set("User-Agent", user_agent)
 	req.Header.Set(header, value)
-	resp, err := c.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}

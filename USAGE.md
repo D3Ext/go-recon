@@ -1,16 +1,16 @@
 # Usage
 
-This file contains some good examples about how to use the tools for external recon, some of them directly pipe output from one tool to another but you should also store the output in files so you don't have to repeat each process. If you have any question contact me via Discord and I'll answer you in less than 24h: ***@d3ext***
+This file contains some good examples about how to use the tools for external recon, some of them directly pipe output from one tool to another, even though you should always store the gathered information in various files so that you don't have to repeat each process.
 
-### How to use go-recon
+## How to use go-recon
 
 #### Main parameters
 
-All tools use CLI parameters with similar names between then, for example most tools allow single use when working with an unique domain via `-d` or `-domain` parameter (i.e. `gr-subdomains -d example.com`) and also allow multiple use when working with multiple domains via `-l` or `-list` parameter (i.e. `gr-subdomains -l domains.txt`) which expect the path to a file which is used as input (one domain/url per line)
+Every tool uses CLI parameters with similar names between then, for example most tools allow single use when working with an unique domain via `-d` or `-domain` parameter (i.e. `gr-subdomains -d example.com`) and also allow multiple use when working with multiple domains via `-l` or `-list` parameter (i.e. `gr-subdomains -l domains.txt`) which expect the path to a file used as input (one domain per line)
 
 #### STDIN
 
-If you prefer to use the tools using STDIN (as a lot of people do) you also can, tools will autodetect that STDIN contains data and will take it as input so you could do something like this:
+If you prefer to use the tools using STDIN (as a lot of people do to chain multiple tools) you also can, tools will autodetect that STDIN contains data and will take it as input so you could do something like this:
 
 ```sh
 echo "example.com" | gr-subdomains
@@ -18,7 +18,7 @@ echo "example.com" | gr-subdomains
 
 #### STDOUT
 
-Tools have multiple output formats: STDOUT, TXT, JSON and CSV. The results will always be printed via STDOUT but you can also use `-o` (or `-output`) to save plain text output to a file (TXT) or `-oj` to save the results to a file in JSON format or `-oc` to do it again but this time in CSV format. Here you have a couple of examples when discovering subdomains:
+Tools have multiple output formats: STDOUT, TXT, JSON and CSV. The results will always be printed via STDOUT but you can also use `-o` (or `-output`) to save plain text output to a file (TXT) or `-oj` to save the results to a file in JSON format or `-oc` to do it again but this time in CSV format. Here you have a couple of output examples when discovering subdomains:
 
 > TXT example
 ```
@@ -80,7 +80,7 @@ forwarding.hackerone.com
 }
 ```
 
-Anyways if you want to pipe STDOUT directly to other tools you could use `-q` (or `-quiet`) parameter which stands for "quiet" so in this way only the results will be printed without printing banner, logging info and other stuff.
+Anyway, if you want to pipe STDOUT directly to other tools you should use `-q` (or `-quiet`) parameter so that in this way only the results will be printed without printing the banner, logging info and other stuff.
 
 > Example
 ```
@@ -99,7 +99,7 @@ gr-subdomains -d example.com -q | gr-probe -skip -q
 
 #### Crawl a list of urls
 
-***gr-crawl*** is a fast crawler with some options which can be truly helpful during target reconnaisance. By default it will crawl with a depth of 2 and with 10 workers, but it can be configured to accomplish your tasks.
+***gr-crawl*** is a fast crawler with some options which can be truly helpful during target reconnaisance. By default it will crawl with a depth of 2 and with 10 workers, but it can be configured to accomplish your needs.
 
 > Only crawl urls inside path
 ```sh
@@ -115,7 +115,7 @@ gr-crawl -u https://example.com -js
 
 ***gr-secrets*** will look for all kind of leaked secrets on given urls by using regular expressions. It should be used with a list of HTML or JS endpoints.
 
-A full example of automated use would be something like this:
+A full automated example would be something like this (chaining multiple tools):
 
 ```sh
 echo "domain.com" | gr-subdomains -q | gr-probe -skip -q | gr-crawl -depth 1 -js -path -q | gr-secrets -c
@@ -123,7 +123,7 @@ echo "domain.com" | gr-subdomains -q | gr-probe -skip -q | gr-crawl -depth 1 -js
 
 #### Remove duplicates and useless urls with custom parameters
 
-Some useful filters are preloaded on the tool itself they're `nocontent`, `hasparams`, `noparams`, `hasextension`, `noextension`. Other filters/patterns will be instaled under `~/.config/go-recon/patterns/`. They can be used with `-f` or `-filter` parameter.
+Some useful filters are preloaded on the tool itself, those filters are `nocontent`, `hasparams`, `noparams`, `hasextension`, `noextension`. Other filters/patterns will be instaled under `~/.config/go-recon/patterns/`. They can be used with `-f` or `-filter` parameter.
 
 ```sh
 gr-filter -l urls.txt # default filter (remove duplicates and useless urls)
@@ -135,7 +135,7 @@ gr-filter -l urls.txt -params FUZZ # replace urls parameters values with given v
 
 #### Filter for specific vulns/patterns with custom templates
 
-gr-replace use custom grep-based templates which are stored under `~/.config/go-recon/patterns/` by default go-recon comes with `xss.json`, `redirects.json`, `sqli.json`, `lfi.json`, `ssti.json`, `ssrf.json`, `rce.json`, `idor.json`, `takeovers.json`, `base64`, `ip`, `jwt`, `sqli_errors`, `s3_buckets`. See [utils/patterns/](https://github.com/D3Ext/go-recon/tree/main/utils/patterns) for all templates
+gr-replace use custom grep-based templates which are stored under `~/.config/go-recon/patterns/`, by default go-recon comes with some more advanced templates which have to be installed by executing `make extra`, that will copy the templates to `~/.config/go-recon/patterns/`. At this time, the mentioned templates are capable of filtering for these things: `xss`, `redirects`, `sqli`, `lfi`, `ssti`, `ssrf`, `rce`, `idor`, `takeovers`, `base64`, `ip`, `jwt`, `sqli_errors`, `s3_buckets`. See [utils/patterns/](https://github.com/D3Ext/go-recon/tree/main/utils/patterns) for all templates
 
 This is an example template:
 
@@ -184,16 +184,18 @@ This is an example template:
 Here are some good examples to take advantage of the templates:
 
 ```sh
+# Find tons of urls related to a domain
 gr-urls -d example.com -o urls.txt
 
-gr-filter -l urls.txt -f xss # look for XSS vuln parameters on urls
-gr-filter -l urls.txt -f sqli,nocontent # look for SQLi vuln parameters without human content
-gr-filter -l urls.txt -f ssti -params FUZZ # look for SSTI vuln parameters and change param values to "FUZZ"
+gr-filter -l urls.txt -f xss # look for parameters potentially vulnerable to XSS
+gr-filter -l urls.txt -f sqli,nocontent # look for parameters potentially vulnerable to SQLi and without human content
+gr-filter -l urls.txt -f ssti -params FUZZ # look for parameters potentially vulnerable to SSTI and change parameter values to "FUZZ"
 ```
 
 It can also be used with any other kind of output, just think about it like a grep on steroids which can do a lot of things.
 
 ```sh
+# Search S3 buckets on source code output
 curl -s -X GET "http://example.com" | gr-filter -f s3_buckets -c
 ```
 
@@ -224,7 +226,7 @@ gr-openredirects -u http://example.com/?param=FUZZ -skip
 
 The tool uses official AWS S3 SDK for Golang. I highly recommend you to enable color on output via `-c` parameter since this way output will be much more readable. This tool has some different uses:
 
-Check if a list of generated bucket names based on domain name exists, get bucket region, try to list their ACLs, list objects and more. For example if provided domain is `example.com`, this and more bucket names will be checked and enumerated:
+Check if a list of generated bucket names based on domain name exists, get bucket region, try to list their ACLs, list objects and more. For example if provided domain is `example.com`, this and more bucket names will be checked and enumerated (based on a list of permutations and common name formats):
 
 ```
 a-example.com
@@ -247,11 +249,11 @@ administration-example.com
 ...
 ```
 
-Execute `gr-aws -d example.com` for single domain or `gr-aws -l domains.txt` for a list of them. The amount of generated permutations can be configured via `-level` flag, it allows `1`, `2`, `3`, `4` and `5` as values. (i.e. `gr-aws -d example.com -level 2`)
+Execute `gr-aws -d example.com` for single domain or `gr-aws -l domains.txt` for a list of them. The amount of generated permutations can be configured via `-level` flag, it allows `1`, `2`, `3`, `4` and `5` as values, `1` represents the lowest amount of permutations and `5` the highest. (i.e. `gr-aws -d example.com -level 2`)
 
 </br>
 
-This tool has other flag (`-bl` or `-bucket-list`), to directly check a list of bucket names. This way is really useful if you also work with other tools or any other thing. If you have a file with bucket names like this:
+This tool has other flag (`-bl` or `-bucket-list`), to directly check a list of bucket names (without generating a list based on perms). This way is really useful if you also work with other tools. Just put the bucket names in a file on this way:
 
 ```
 bucket-com
@@ -262,14 +264,14 @@ admin-example.com
 ...
 ```
 
-You can check if they exists and enumerate them like this: `gr-aws -bl buckets.txt`
+It will verify if they exist and also will check the permissions, ACLs and other misconfigurations.
 
 Here are some extra generic examples:
 
 ```sh
 gr-aws -d example.com -o found_buckets.txt -c # write existing buckets to file
 gr-aws -d example.com -p perms.txt # using custom permutations (one perm per line)
-gr-aws -bl buckets_to_check.txt -proxy http://127.0.0.1:8080 # using a proxy
+gr-aws -bl buckets_to_check.txt -proxy http://127.0.0.1:8080 # directly using a list of buckets and a proxy
 gr-subdomains -d example.com -quiet | gr-aws -level 1 -c # Check common buckets for subdomains
 ```
 
@@ -291,7 +293,7 @@ gr-subdomains -d example.com -q | gr-probe -skip -fc 403 -q | gr-403 -skip -c
 gr-subdomains -d hackerone.com -q | gr-probe -skip -q | gr-waf -hide -c
 ```
 
-#### Enumerate running technologies in mass
+#### Enumerate running technologies in-mass
 
 ```sh
 gr-subdomains -d hackerone.com -q | gr-probe -techs -skip -c
