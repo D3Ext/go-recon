@@ -14,7 +14,9 @@ func main() {
 
 	timeout := 5000
 
-	urls, status_codes, err := gorecon.Check403(url, word, timeout)
+  client := gorecon.CreateHttpClient(timeout)
+
+	urls, status_codes, err := gorecon.Check403(url, word, client, "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0")
 	if err != nil {
 		log.Fatal(err)
 	}

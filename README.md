@@ -173,12 +173,12 @@ If you want to use ***go-recon*** in your own Golang code see [here](https://git
 - More tools and features
 - More optimization
 - Email accounts enumeration
-- ~~~Little fixes~~~
-- ~~~CSV output supported by default on every tool~~~
-- ~~~CLI parameter to configure custom user agents~~~
-- ~~~More filtering patterns~~~
-- ~~~More vulnerabilities payloads~~~
-- ~~~WAF detection improved~~~
+- ~Little fixes~
+- ~CSV output supported by default on every tool~
+- ~CLI parameter to configure custom user agents~
+- ~More filtering patterns~
+- ~More vulnerabilities payloads~
+- ~WAF detection improved~
 
 # References
 
