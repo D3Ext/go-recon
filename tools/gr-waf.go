@@ -54,6 +54,7 @@ func helpPanel() {
     -x                      only test one single payload to try to identify the running WAF (useful for in-mass recon)
     -k, -keyword string     keyword to replace in urls (if url doesn't contain keyword no change is done) (default=FUZZ)
     -w, -workers int        number of concurrent workers (default=15)
+    -H, -header string      include custom headers (separated by semicolon) on HTTP requests
     -a, -agent string       user agent to include on requests (default=generic agent)
     -p, -proxy string       proxy to send requests through (i.e. http://127.0.0.1:8080)
     -t, -timeout int        milliseconds to wait before timeout (default=4000)
@@ -84,6 +85,7 @@ func main() {
   var one_payload bool
 	var keyword string
 	var workers int
+  var header string
 	var proxy string
 	var timeout int
 	var user_agent string
@@ -108,6 +110,8 @@ func main() {
 	flag.StringVar(&keyword, "keyword", "FUZZ", "")
 	flag.IntVar(&workers, "w", 15, "")
 	flag.IntVar(&workers, "workers", 15, "")
+  flag.StringVar(&header, "H", "", "")
+  flag.StringVar(&header, "header", "", "")
 	flag.StringVar(&proxy, "proxy", "", "")
 	flag.IntVar(&timeout, "t", 4000, "")
 	flag.IntVar(&timeout, "timeout", 4000, "")
@@ -175,6 +179,15 @@ func main() {
 
 	// send request to waf vendors data (json format)
 	req, _ := http.NewRequest("GET", json_url, nil)
+
+  if header != "" {
+    for _, h := range strings.Split(header, ";") {
+      header_name := strings.Split(h, ":")[0]
+      header_value := strings.ReplaceAll(strings.Split(h, ":")[1], " ", "")
+      req.Header.Set(header_name, header_value)
+    }
+  }
+
   req.Header.Set("User-Agent", user_agent)
 	req.Header.Add("Connection", "keep-alive")
 	req.Close = true
@@ -268,6 +281,15 @@ func main() {
 		}
 
 		req, _ = http.NewRequest("GET", url, nil)
+
+    if header != "" {
+      for _, h := range strings.Split(header, ";") {
+        header_name := strings.Split(h, ":")[0]
+        header_value := strings.ReplaceAll(strings.Split(h, ":")[1], " ", "")
+        req.Header.Set(header_name, header_value)
+      }
+    }
+
     req.Header.Set("User-Agent", user_agent)
 		req.Header.Add("Connection", "keep-alive")
 		req.Close = true
@@ -311,6 +333,15 @@ func main() {
       }
 
       req, _ = http.NewRequest("GET", payload_url, nil)
+
+      if header != "" {
+        for _, h := range strings.Split(header, ";") {
+          header_name := strings.Split(h, ":")[0]
+          header_value := strings.ReplaceAll(strings.Split(h, ":")[1], " ", "")
+          req.Header.Set(header_name, header_value)
+        }
+      }
+
       req.Header.Set("User-Agent", user_agent)
       req.Header.Add("Connection", "close")
       req.Close = true

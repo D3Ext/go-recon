@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+  "strings"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
@@ -48,6 +49,7 @@ func helpPanel() {
 
   CONFIG:
     -w, -workers int      number of concurrent workers (default=10)
+    -H, -header string    include custom headers (separated by semicolon) on HTTP requests
     -a, -agent string     user agent to include on requests (default=generic agent)
     -p, -proxy string     proxy to send requests through (i.e. http://127.0.0.1:8080)
     -t, -timeout int      milliseconds to wait before each request timeout (default=5000)
@@ -75,6 +77,7 @@ func main() {
 	var regex string
 	var regex_list string
 	var workers int
+  var header string
   var user_agent string
 	var proxy string
 	var output string
@@ -97,6 +100,8 @@ func main() {
 	flag.StringVar(&regex_list, "regex-list", "", "")
 	flag.IntVar(&workers, "w", 10, "")
 	flag.IntVar(&workers, "workers", 10, "")
+  flag.StringVar(&header, "H", "", "")
+  flag.StringVar(&header, "header", "", "")
   flag.StringVar(&user_agent, "a", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
   flag.StringVar(&user_agent, "agent", "Mozilla/5.0 (X11; Linux x86_64; rv:78.0) Gecko/20100101 Firefox/78.0", "")
 	flag.StringVar(&proxy, "p", "", "")
@@ -213,6 +218,15 @@ func main() {
 
 		client := core.CreateHttpClient(timeout)
 		req, _ := http.NewRequest("GET", url, nil)
+
+    if header != "" {
+      for _, h := range strings.Split(header, ";") {
+        header_name := strings.Split(h, ":")[0]
+        header_value := strings.ReplaceAll(strings.Split(h, ":")[1], " ", "")
+        req.Header.Set(header_name, header_value)
+      }
+    }
+
     req.Header.Set("User-Agent", user_agent)
 		req.Header.Add("Connection", "close")
 		req.Close = true
@@ -338,6 +352,15 @@ func main() {
 
 					client := core.CreateHttpClient(timeout)
 					req, _ := http.NewRequest("GET", js_endpoint, nil)
+
+          if header != "" {
+            for _, h := range strings.Split(header, ";") {
+              header_name := strings.Split(h, ":")[0]
+              header_value := strings.ReplaceAll(strings.Split(h, ":")[1], " ", "")
+              req.Header.Set(header_name, header_value)
+            }
+          }
+
           req.Header.Set("User-Agent", user_agent)
 					req.Header.Add("Connection", "close")
 					req.Close = true

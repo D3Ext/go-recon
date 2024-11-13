@@ -173,6 +173,7 @@ If you want to use ***go-recon*** in your own Golang code see [here](https://git
 - More tools and features
 - More optimization
 - Email accounts enumeration
+- ~Custom headers support (only on tools that send requests directly to the target)~
 - ~Little fixes~
 - ~CSV output supported by default on every tool~
 - ~CLI parameter to configure custom user agents~
