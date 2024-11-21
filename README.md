@@ -33,9 +33,9 @@
 
 # Introduction
 
-This project started as various Golang scripts to automatically perform tedious processes while performing external recon, between another bunch of things. Over the time I polished the scripts and finally decided to create much more versatile tools, in this way I would also learn to use Golang channels and concurrency.
+This project started as some Golang scripts to automatically perform tedious processes while performing external recon, between another bunch of things. Over the time I reworked the scripts and finally decided to create much more versatile tools, in this way I would also learn to use Golang channels and concurrency.
 
-This toolkit provides tools for different purposes (enum and exploitation) while performing external recon. Most functions are also available and can be used through the official package API for your own tools. Feel free to contribute by reporting issues or discussing ideas.
+This toolkit provides tools for different purposes (enum and exploitation) while performing external recon. I also have to say that this project is not perfect and most of the available features are designed for bug bounty and that is why, for example, some tools only check the presence of vulnerabilities but does not exploit them. Most functions are also available and can be used through the official package API for your own tools. Feel free to contribute by reporting issues or discussing ideas.
 
 # General Features
 
@@ -58,10 +58,11 @@ Every tool starts with "gr" as acronym of ***GoRecon*** in order to distinct the
 - ***gr-urls***: Find URLs (endpoints) of a domain from different sources (Wayback, AlienVault)
 - ***gr-probe***: Probe active subdomains and URLs (http and https) fastly, with custom concurrency and more
 - ***gr-403***: Try to bypass pages that return 403 status code (multiple techniques)
-- ***gr-openredirects***: Fuzz for potential open redirects on given URLs using a payload/list of payloads
+- ***gr-openredirects***: Fuzz for potential open redirects on given URLs using a payload/custom list of payloads
 - ***gr-aws***: Enumerate S3 buckets for given domain using permutations, verify bucket lists and much more
 - ***gr-waf***: Identify which WAF is running on target using multiple payloads
 - ***gr-filter***: Remove useless URLs from list using inteligent filtering, create custom filter patterns
+- ***gr-ssti***: Look for potential SSTI vulnerabilities on given URLs based on multiple engines payloads
 - ***gr-replace***: Replace given keyword or parameter value with provided value from URLs of a list
 - ***gr-secrets***: Search for API keys and leaked secrets in HTML and JS pages
 - ***gr-crawl***: Fastly crawl urls for gathering URLs and JS endpoints, with custom depth and other config options
@@ -168,10 +169,20 @@ $ go get github.com/D3Ext/go-recon/pkg/go-recon
 
 If you want to use ***go-recon*** in your own Golang code see [here](https://github.com/D3Ext/go-recon/tree/main/examples)
 
+# Additional Resources
+
+This project also contains a set of diverse resources under `utils/` that may be useful for web exploitation and bug bounty. For example, the WAF vendors information in JSON format which is directly used by `gr-waf` to identify them.
+
+There also are a few lists of payloads for different vulnerabilities such as XSS, SQLi or LFI.
+
+Moreover, you could find some already vulnerable web pages that you can directly run to test the different vulnerabilities by your own. Most of the templates are extremely simple but effective
+
+There also is a Bash script (`go-recon.sh`) which leverages most of the features this project provides in order to automate a great part of the external recon process against a domain.
+
 # TODO
 
-- More tools and features
-- More optimization
+- ~~More tools and features~~
+- Add parameter to add custom POST data
 - Email accounts enumeration
 - ~Custom headers support (only on tools that send requests directly to the target)~
 - ~Little fixes~

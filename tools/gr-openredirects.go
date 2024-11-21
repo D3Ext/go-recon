@@ -44,7 +44,7 @@ func helpPanel() {
   PAYLOADS:
     -k, -keyword string           keyword to replace in urls with payloads (default=FUZZ)
     -pl, -payloads-list string    file containing a list of payloads (if not especified, default payloads are used)
-    -s, -skip                     only test 1 payload (useful for in-mass testing)
+    -s, -skip                     only test most common payloads (useful for in-mass testing)
 
   CONFIG:
     -w, -workers int        number of concurrent workers (default=15)
@@ -191,7 +191,7 @@ func main() {
 	var payloads []string
 
 	if skip { // set unique payload if user only want to use one
-		payloads = []string{"https://bing.com"}
+		payloads = []string{"https://bing.com", "bing.com", "//bing.com"}
 
 	} else if payloads_list == "" { // set default payloads
 		payloads = core.GetPayloads()

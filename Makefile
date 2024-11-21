@@ -12,6 +12,7 @@ all:
 	$(CC) build -ldflags="-s -w" -o build/gr-openredirects tools/gr-openredirects.go
 	$(CC) build -ldflags="-s -w" -o build/gr-crawl tools/gr-crawl.go
 	$(CC) build -ldflags="-s -w" -o build/gr-whois tools/gr-whois.go
+	$(CC) build -ldflags="-s -w" -o build/gr-ssti tools/gr-ssti.go
 	$(CC) build -ldflags="-s -w" -o build/gr-replace tools/gr-replace.go
 	$(CC) build -ldflags="-s -w" -o build/gr-403 tools/gr-403.go
 	$(CC) build -ldflags="-s -w" -o build/gr-filter tools/gr-filter.go
@@ -27,6 +28,7 @@ install:
 	install -m 0755 build/gr-openredirects $(DESTDIR)/usr/bin/gr-openredirects
 	install -m 0755 build/gr-crawl $(DESTDIR)/usr/bin/gr-crawl
 	install -m 0755 build/gr-whois $(DESTDIR)/usr/bin/gr-whois
+	install -m 0755 build/gr-ssti $(DESTDIR)/usr/bin/gr-ssti
 	install -m 0755 build/gr-403 $(DESTDIR)/usr/bin/gr-403
 	install -m 0755 build/gr-filter $(DESTDIR)/usr/bin/gr-filter
 	install -m 0755 build/gr-replace $(DESTDIR)/usr/bin/gr-replace
