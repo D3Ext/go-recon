@@ -227,7 +227,7 @@ https://github.com/hueristiq/xs3scann3r
 
 This project is under MIT license
 
-Copyright © 2024, *D3Ext*
+Copyright © 2025, *D3Ext*
 
 
 

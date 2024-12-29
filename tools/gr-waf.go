@@ -441,7 +441,7 @@ func main() {
 				for u := range urls_c { // get url from channel
 
           for _, payload := range payloads_to_use {
-            if (!strings.HasPrefix(u, "http://")) && (!strings.HasPrefix(u, "https://")) {
+            /*if (!strings.HasPrefix(u, "http://")) && (!strings.HasPrefix(u, "https://")) {
               url = "https://" + u
             }
 
@@ -450,16 +450,16 @@ func main() {
 
             } else if !strings.HasSuffix(u, "/") {
               url = u + "/" + payload
-            }
+            }*/
 
-            req, _ := http.NewRequest("GET", url, nil)
-            req.Header.Set("User-Agent", user_agent)          
+            req, _ := http.NewRequest("GET", u + payload, nil)
+            req.Header.Set("User-Agent", user_agent)
             req.Header.Add("Connection", "close")
             req.Close = true
 
             resp, err := client.Do(req) // Send request
             if err != nil {
-              log.Fatal(err)
+              continue
             }
             defer resp.Body.Close()
 

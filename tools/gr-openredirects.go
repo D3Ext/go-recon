@@ -7,7 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
-	tld "github.com/jpillora/go-tld"
+  nurl "net/url"
+	//tld "github.com/jpillora/go-tld"
 	"log"
 	"net/http"
 	"os"
@@ -212,12 +213,13 @@ func main() {
 	var redirectTarget string
 	for _, p := range payloads { // get payloads redirect domain (i.e. bing.com, example.com, google.com)
 		if (strings.HasPrefix(p, "http://")) || (strings.HasPrefix(p, "https://")) {
-			parse, err := tld.Parse(p)
-			if err != nil {
-				continue
-			}
+      parse, err := nurl.Parse(p)
+      if err != nil {
+        continue
+      }
 
-			redirectTarget = parse.Domain + "." + parse.TLD
+      redirectTarget = parse.Host
+
 			break
 		}
 	}
@@ -282,7 +284,12 @@ func main() {
 					defer resp.Body.Close()
 
 					if resp.StatusCode == http.StatusOK {
-						if strings.Contains(resp.Request.URL.String(), redirectTarget) {
+            finalURL, err := nurl.Parse(resp.Request.URL.String())
+            if err != nil {
+              continue
+            }
+
+            if finalURL.Host == redirectTarget || finalURL.Hostname() == redirectTarget {
 							fmt.Println(new_url)
 							found_redirects = append(found_redirects, new_url)
               csv_info = append(csv_info, []string{url, payload})
@@ -344,7 +351,12 @@ func main() {
 						defer resp.Body.Close()
 
 						if resp.StatusCode == http.StatusOK {
-							if strings.Contains(resp.Request.URL.String(), redirectTarget) {
+              finalURL, err := nurl.Parse(resp.Request.URL.String())
+              if err != nil {
+                continue
+              }
+
+              if finalURL.Host == redirectTarget || finalURL.Hostname() == redirectTarget {
 								fmt.Println(new_url)
 								found_redirects = append(found_redirects, new_url)
                 csv_info = append(csv_info, []string{url, payload})
